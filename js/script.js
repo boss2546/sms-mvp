@@ -794,7 +794,7 @@ class SMSVerificationService {
     }
 
     createActivationCard(activation) {
-        const card = document.createElement('div');
+    const card = document.createElement('div');
         card.className = 'activation-card';
         
         const timeLeft = Math.max(0, Math.floor((activation.endTime - new Date()) / 1000 / 60));
@@ -832,8 +832,8 @@ class SMSVerificationService {
         const twoMinutes = 2 * 60 * 1000; // 2 minutes in milliseconds
         const canCancel = timeSinceOrder >= twoMinutes;
         const remainingTime = Math.ceil((twoMinutes - timeSinceOrder) / 1000);
-        
-        card.innerHTML = `
+    
+    card.innerHTML = `
             <div class="activation-header-card">
                 <div class="activation-info">
                     <div class="country-flag">🇹🇭</div>
@@ -845,7 +845,7 @@ class SMSVerificationService {
                 <div class="activation-status ${statusClass}">
                     <i class="${statusIcon}"></i>
                     ${statusText}
-                </div>
+        </div>
             </div>
             
             <div class="phone-number">${activation.phoneNumber}</div>
@@ -891,11 +891,11 @@ class SMSVerificationService {
                     <i class="fas fa-sms"></i>
                     Request Another SMS
                 </button>
-            </div>
+        </div>
         `;
-        
-        return card;
-    }
+    
+    return card;
+}
 
     scrollToActivationSection() {
         const activationSection = document.getElementById('activationSection');
@@ -1136,9 +1136,9 @@ class SMSVerificationService {
         this.currentOperator = 'any';
         
         // Update UI
-        this.updateCountrySelect();
-        this.updateOperatorSelect();
-        this.updateServicesGrid();
+        this.updateCountrySelect(this.countriesData);
+        this.updateOperatorSelect(this.operatorsData);
+        this.renderServices(this.servicesData);
         this.updateStatistics();
         
         // Set balance

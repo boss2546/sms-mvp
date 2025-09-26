@@ -45,31 +45,11 @@ class SMSVerificationService {
 
         // Show more services - removed
 
-        // Modal events
-        document.getElementById('signInBtn').addEventListener('click', () => {
-            this.showAuthModal();
-        });
+        // Modal events - removed (no more login modal)
 
-        document.getElementById('signUpBtn').addEventListener('click', () => {
-            this.showAuthModal();
-        });
+        // Close modals when clicking outside - removed (no more login modal)
 
-        document.getElementById('authModalClose').addEventListener('click', () => {
-            this.hideAuthModal();
-        });
-
-        // Close modals when clicking outside
-        document.getElementById('authModal').addEventListener('click', (e) => {
-            if (e.target.id === 'authModal') {
-                this.hideAuthModal();
-            }
-        });
-
-        // Form submissions
-        document.getElementById('authForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.handleAuth();
-        });
+        // Form submissions - removed (no more login form)
     }
 
     async loadInitialData() {
@@ -1054,26 +1034,7 @@ class SMSVerificationService {
         }
     }
 
-    showAuthModal() {
-        document.getElementById('authModal').classList.add('active');
-    }
-
-    hideAuthModal() {
-        document.getElementById('authModal').classList.remove('active');
-    }
-
-    handleAuth() {
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        
-        // Simplified auth for demo
-        if (email && password) {
-            this.showMessage('Signed in successfully', 'success');
-            this.hideAuthModal();
-            // Update UI to show logged in state
-            document.getElementById('signInBtn').innerHTML = '<i class="fas fa-user"></i> Account';
-        }
-    }
+    // Auth modal functions removed - no more login system
 
     showLoading() {
         document.getElementById('loadingOverlay').classList.add('active');

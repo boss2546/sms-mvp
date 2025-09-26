@@ -1,7 +1,7 @@
 // SMS Verification Service - Main Script
 class SMSVerificationService {
     constructor() {
-        this.API_BASE_URL = '/api';
+        this.API_BASE_URL = 'https://sms-verification-number.com/stubs/handler_api';
         this.API_KEY = '7ccb326980edc2bfec78dcd66326aad7';
         this.LANG = 'en';
         

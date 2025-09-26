@@ -32,6 +32,17 @@ body {
     align-items: center;
 }
 
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.logo-img {
+    height: 40px;
+    width: auto;
+}
+
 .logo h1 {
     font-size: 1.8rem;
     font-weight: 700;
@@ -557,7 +568,7 @@ body {
     }
 }
 
-/* Responsive Design */
+/* Mobile-First Responsive Design */
 @media (max-width: 768px) {
     .catalog-content {
         grid-template-columns: 1fr;
@@ -587,12 +598,6 @@ body {
         width: 95%;
         margin: 1rem;
     }
-}
-
-@media (max-width: 480px) {
-    .container {
-        padding: 0 15px;
-    }
     
     .catalog-header h2 {
         font-size: 2rem;
@@ -605,5 +610,51 @@ body {
     
     .service-filters {
         justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 0 15px;
+    }
+    
+    .catalog-header h2 {
+        font-size: 1.8rem;
+    }
+    
+    .service-card {
+        padding: 1rem;
+    }
+    
+    .service-icon {
+        font-size: 1.5rem;
+    }
+    
+    .buy-btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+}
+
+/* Tablet Responsive */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .catalog-content {
+        grid-template-columns: 1fr 1.5fr;
+        gap: 2rem;
+    }
+    
+    .service-list {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+}
+
+/* Desktop Optimizations */
+@media (min-width: 1025px) {
+    .service-list {
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    }
+    
+    .service-card {
+        min-height: 120px;
     }
 }

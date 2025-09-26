@@ -1,3 +1,8 @@
+// Import API functions
+import { getCountries, getOperatorsByCountry, getServicesAndCost, getRecommendedServices } from '../api/countries.js';
+import { getOperators } from '../api/operators.js';
+import { getServicesAndCost as getServices, getServicesByCategory, getAvailableServices } from '../api/services.js';
+
 // DOM Elements
 const authBtn = document.getElementById('authBtn');
 const authModal = document.getElementById('authModal');
@@ -186,28 +191,222 @@ slipUpload.addEventListener('change', (e) => {
 });
 
 // Country and Operator Change Handlers
-countrySelect.addEventListener('change', (e) => {
-    const countryId = e.target.value;
+countrySelect.addEventListener('change', async (e) => {
+    const countryId = parseInt(e.target.value);
     console.log('Country changed to:', countryId);
     
-    // TODO: Update operators based on country
-    // TODO: Update services based on country and operator
+    try {
+        // Update operators based on country
+        await updateOperators(countryId);
+        
+        // Reset operator selection
+        operatorSelect.value = 'any';
+        
+        // Update services
+        await updateServices(countryId, 'any');
+    } catch (error) {
+        console.error('Error updating operators:', error);
+        showError('ไม่สามารถโหลดข้อมูลผู้ให้บริการได้');
+    }
 });
 
-operatorSelect.addEventListener('change', (e) => {
+operatorSelect.addEventListener('change', async (e) => {
     const operator = e.target.value;
+    const countryId = parseInt(countrySelect.value);
     console.log('Operator changed to:', operator);
     
-    // TODO: Update services based on operator
+    try {
+        // Update services based on operator
+        await updateServices(countryId, operator);
+    } catch (error) {
+        console.error('Error updating services:', error);
+        showError('ไม่สามารถโหลดข้อมูลบริการได้');
+    }
 });
 
+// API Integration Functions
+async function loadCountries() {
+    try {
+        const countries = await getCountries();
+        updateCountrySelect(countries);
+    } catch (error) {
+        console.error('Error loading countries:', error);
+        showError('ไม่สามารถโหลดข้อมูลประเทศได้');
+    }
+}
+
+async function updateOperators(countryId) {
+    try {
+        const operators = await getOperatorsByCountry(countryId);
+        updateOperatorSelect(operators);
+    } catch (error) {
+        console.error('Error updating operators:', error);
+        showError('ไม่สามารถโหลดข้อมูลผู้ให้บริการได้');
+    }
+}
+
+async function updateServices(countryId, operatorId) {
+    try {
+        const services = await getServicesAndCost(countryId, operatorId);
+        updateServiceList(services);
+    } catch (error) {
+        console.error('Error updating services:', error);
+        showError('ไม่สามารถโหลดข้อมูลบริการได้');
+    }
+}
+
+function updateCountrySelect(countries) {
+    // Clear existing options
+    countrySelect.innerHTML = '';
+    
+    // Add default option
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'เลือกประเทศ';
+    countrySelect.appendChild(defaultOption);
+    
+    // Add country options
+    countries.forEach(country => {
+        const option = document.createElement('option');
+        option.value = country.id;
+        option.textContent = country.name;
+        countrySelect.appendChild(option);
+    });
+}
+
+function updateOperatorSelect(operators) {
+    // Clear existing options
+    operatorSelect.innerHTML = '';
+    
+    // Add default option
+    const defaultOption = document.createElement('option');
+    defaultOption.value = 'any';
+    defaultOption.textContent = 'สุ่ม (Any)';
+    operatorSelect.appendChild(defaultOption);
+    
+    // Add operator options
+    operators.forEach(operator => {
+        const option = document.createElement('option');
+        option.value = operator.id;
+        option.textContent = operator.name;
+        operatorSelect.appendChild(option);
+    });
+}
+
+function updateServiceList(services) {
+    const serviceList = document.querySelector('.service-list');
+    
+    // Clear existing services
+    serviceList.innerHTML = '';
+    
+    if (services.length === 0) {
+        serviceList.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>ไม่มีบริการที่พร้อมใช้งาน</h3>
+                <p>กรุณาเลือกประเทศและผู้ให้บริการอื่น</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Create service cards
+    services.forEach(service => {
+        const serviceCard = createServiceCard(service);
+        serviceList.appendChild(serviceCard);
+    });
+}
+
+function createServiceCard(service) {
+    const card = document.createElement('div');
+    card.className = `service-card ${service.available ? '' : 'unavailable'}`;
+    card.dataset.category = service.category;
+    
+    const iconClass = getServiceIcon(service.id);
+    const priceFormatted = formatPrice(service.price);
+    const stockText = service.available ? `${service.quantity} หมายเลข` : 'หมด';
+    
+    card.innerHTML = `
+        <div class="service-icon">
+            <i class="${iconClass}"></i>
+        </div>
+        <div class="service-info">
+            <h4>${service.name}</h4>
+            <p class="service-desc">รับ SMS สำหรับ ${service.name}</p>
+            <div class="service-meta">
+                <span class="price">${priceFormatted}</span>
+                <span class="stock">${stockText}</span>
+            </div>
+        </div>
+        <button class="buy-btn" ${!service.available ? 'disabled' : ''}>
+            ${service.available ? 'ซื้อ' : 'หมด'}
+        </button>
+    `;
+    
+    // Add event listener to buy button
+    const buyBtn = card.querySelector('.buy-btn');
+    if (service.available) {
+        buyBtn.addEventListener('click', () => {
+            handleServicePurchase(service);
+        });
+    }
+    
+    return card;
+}
+
+function getServiceIcon(serviceId) {
+    const iconMap = {
+        'fb': 'fab fa-facebook',
+        'ig': 'fab fa-instagram',
+        'wa': 'fab fa-whatsapp',
+        'tg': 'fab fa-telegram',
+        'sn': 'fab fa-snapchat',
+        'ds': 'fab fa-discord',
+        'ts': 'fab fa-paypal',
+        're': 'fab fa-bitcoin',
+        'mt': 'fab fa-steam',
+        'go': 'fab fa-google',
+        'mm': 'fab fa-microsoft'
+    };
+    
+    return iconMap[serviceId] || 'fas fa-mobile-alt';
+}
+
+function showError(message) {
+    // Create error notification
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-notification';
+    errorDiv.innerHTML = `
+        <i class="fas fa-exclamation-circle"></i>
+        <span>${message}</span>
+    `;
+    
+    // Add to page
+    document.body.appendChild(errorDiv);
+    
+    // Remove after 5 seconds
+    setTimeout(() => {
+        errorDiv.remove();
+    }, 5000);
+}
+
 // Initialize page
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('SMS Verification Service initialized');
     
-    // TODO: Load initial data from APIs
-    // TODO: Set up real-time updates
-    // TODO: Initialize user session if exists
+    try {
+        // Load initial data from APIs
+        await loadCountries();
+        
+        // Set default country (Thailand)
+        countrySelect.value = '52';
+        await updateOperators(52);
+        await updateServices(52, 'any');
+        
+    } catch (error) {
+        console.error('Error initializing page:', error);
+        showError('เกิดข้อผิดพลาดในการโหลดข้อมูล');
+    }
 });
 
 // Utility Functions

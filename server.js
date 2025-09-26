@@ -15,9 +15,9 @@ app.use(express.static('.'));
 // Proxy endpoint for SMS verification API
 app.get('/api', async (req, res) => {
     try {
-        console.log('🔄 Proxying request to SMS API...');
-        console.log('📡 Request URL:', req.url);
-        console.log('📡 Query params:', req.query);
+        console.log('🔄 กำลังส่งคำขอไปยัง SMS API...');
+        console.log('📡 URL คำขอ:', req.url);
+        console.log('📡 พารามิเตอร์:', req.query);
         
         // Extract query parameters
         const queryString = new URLSearchParams(req.query).toString();
@@ -25,7 +25,7 @@ app.get('/api', async (req, res) => {
         // Construct the full API URL
         const apiUrl = `https://sms-verification-number.com/stubs/handler_api?${queryString}`;
         
-        console.log('📡 API URL:', apiUrl);
+        console.log('📡 URL API:', apiUrl);
         
         // Make the request to the SMS API with retry mechanism
         const response = await axios.get(apiUrl, {
@@ -41,8 +41,8 @@ app.get('/api', async (req, res) => {
             }
         });
         
-        console.log('✅ API Response received:', response.status);
-        console.log('📄 Response data:', response.data);
+        console.log('✅ ได้รับการตอบสนองจาก API:', response.status);
+        console.log('📄 ข้อมูลการตอบสนอง:', response.data);
         
         // Set appropriate headers
         res.set({
@@ -64,28 +64,28 @@ app.get('/api', async (req, res) => {
         }
         
     } catch (error) {
-        console.error('❌ Proxy Error:', error.message);
-        console.error('❌ Error details:', error.response?.data);
+        console.error('❌ ข้อผิดพลาด Proxy:', error.message);
+        console.error('❌ รายละเอียดข้อผิดพลาด:', error.response?.data);
         
         // Handle different types of errors
         let statusCode = 500;
-        let errorMessage = 'Proxy Error';
+        let errorMessage = 'ข้อผิดพลาด Proxy';
         
         if (error.code === 'ECONNABORTED') {
             statusCode = 408;
-            errorMessage = 'Request timeout - API server is slow';
+            errorMessage = 'หมดเวลารอ - เซิร์ฟเวอร์ API ช้า';
         } else if (error.code === 'ENOTFOUND') {
             statusCode = 503;
-            errorMessage = 'API server not found';
+            errorMessage = 'ไม่พบเซิร์ฟเวอร์ API';
         } else if (error.response) {
             statusCode = error.response.status;
-            errorMessage = `API Error: ${error.response.statusText}`;
+            errorMessage = `ข้อผิดพลาด API: ${error.response.statusText}`;
         }
         
         res.status(statusCode).json({
             error: errorMessage,
             message: error.message,
-            details: error.response?.data || 'No additional details',
+            details: error.response?.data || 'ไม่มีรายละเอียดเพิ่มเติม',
             timestamp: new Date().toISOString()
         });
     }
@@ -95,7 +95,7 @@ app.get('/api', async (req, res) => {
 app.get('/health', (req, res) => {
     res.json({ 
         status: 'OK', 
-        message: 'SMS Verification Proxy is running',
+        message: 'SMS Verification Proxy กำลังทำงาน',
         timestamp: new Date().toISOString()
     });
 });
@@ -107,19 +107,19 @@ app.get('/', (req, res) => {
 
 // Start the server
 app.listen(PORT, () => {
-    console.log('🚀 SMS Verification Proxy Server started');
-    console.log(`📡 Server running on http://localhost:${PORT}`);
+    console.log('🚀 SMS Verification Proxy Server เริ่มทำงานแล้ว');
+    console.log(`📡 เซิร์ฟเวอร์ทำงานที่ http://localhost:${PORT}`);
     console.log('🔧 Proxy endpoint: http://localhost:' + PORT + '/api/');
-    console.log('💡 Open your browser and go to: http://localhost:' + PORT);
+    console.log('💡 เปิดเบราว์เซอร์และไปที่: http://localhost:' + PORT);
 });
 
 // Handle graceful shutdown
 process.on('SIGTERM', () => {
-    console.log('🛑 Shutting down server...');
+    console.log('🛑 กำลังปิดเซิร์ฟเวอร์...');
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
-    console.log('🛑 Shutting down server...');
+    console.log('🛑 กำลังปิดเซิร์ฟเวอร์...');
     process.exit(0);
 });

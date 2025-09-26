@@ -23,11 +23,120 @@ class SMSVerificationService {
         this.requestTimeout = 10000; // 10 seconds
         this.isLoading = false;
         
+        // Service name translations
+        this.serviceTranslations = {
+            'Google,youtube,Gmail': 'Google, YouTube, Gmail',
+            'Grab': 'Grab',
+            'Facebook': 'Facebook',
+            'WeChat': 'WeChat',
+            'TikTok/Douyin': 'TikTok/Douyin',
+            'Line msg': 'Line',
+            'Shopee': 'Shopee',
+            'Lazada': 'Lazada',
+            'Telegram': 'Telegram',
+            'RedBook': 'RedBook',
+            'Imo': 'Imo',
+            'WhatsApp': 'WhatsApp',
+            'Discord': 'Discord',
+            'BytePlus': 'BytePlus',
+            'Blizzard': 'Blizzard',
+            'Bolt': 'Bolt',
+            'Tinder': 'Tinder',
+            'Claude': 'Claude',
+            'Signal': 'Signal',
+            'Вконтакте (vk.ru)': 'VKontakte',
+            'Apple': 'Apple',
+            'TrueMoney': 'TrueMoney',
+            'Microsoft': 'Microsoft',
+            'Ticket Plus': 'Ticket Plus',
+            'Instagram+Threads': 'Instagram+Threads',
+            'Bumble': 'Bumble',
+            'NHN Cloud': 'NHN Cloud',
+            'TrueID': 'TrueID',
+            'Netflix': 'Netflix',
+            'CupidMedia': 'CupidMedia',
+            'KeeTa 美团': 'KeeTa',
+            'Happn': 'Happn',
+            'Deliveroo': 'Deliveroo',
+            'Payoneer': 'Payoneer',
+            'Viber': 'Viber',
+            'JDcom': 'JD.com',
+            'AIS': 'AIS',
+            'XM': 'XM',
+            'eBay - Kleinanzeigen.de': 'eBay Kleinanzeigen',
+            'Tencent QQ': 'QQ',
+            'GNJOY': 'GNJOY',
+            'AsianDating': 'AsianDating',
+            'Amazon': 'Amazon',
+            'Shopback': 'Shopback',
+            '快手 Kuaishou': 'Kuaishou',
+            'Xpress Super App': 'Xpress Super App',
+            'InternationalCupid': 'InternationalCupid',
+            'Fiverr': 'Fiverr',
+            'TanTan': 'TanTan',
+            'Yahoo': 'Yahoo',
+            'Twitch': 'Twitch',
+            'ProtonMail': 'ProtonMail',
+            'FreeNow': 'FreeNow',
+            'Baidu': 'Baidu',
+            'Botim': 'Botim',
+            'BigC': 'BigC',
+            'mail.com': 'mail.com',
+            'Redbubble': 'Redbubble',
+            'WePoker': 'WePoker',
+            'PayPal': 'PayPal',
+            'Wise': 'Wise',
+            'Sonline': 'Sonline',
+            'Noon': 'Noon',
+            'AliExpress': 'AliExpress',
+            '7-Eleven': '7-Eleven',
+            'Uber': 'Uber',
+            'Grindr': 'Grindr',
+            'Truecaller': 'Truecaller',
+            'Ocard': 'Ocard',
+            'MosGram': 'MosGram',
+            'Snapchat': 'Snapchat',
+            'Shopify': 'Shopify',
+            'Naver': 'Naver',
+            'Alipay/Alibaba': 'Alipay/Alibaba',
+            'Rothmans': 'Rothmans',
+            'Careem': 'Careem',
+            'ChatGPT (openAI.com)': 'ChatGPT',
+            'Airbnb': 'Airbnb',
+            'Foodpanda': 'Foodpanda',
+            'X.com (Twitter)': 'X (Twitter)',
+            'Steam': 'Steam',
+            'LinkedIN': 'LinkedIn',
+            'Weibo': 'Weibo',
+            'Bilibili': 'Bilibili',
+            'Yalla': 'Yalla',
+            'Zalo': 'Zalo',
+            'Яндекс (Yandex)': 'Yandex',
+            'AOL': 'AOL',
+            'Michat': 'Michat',
+            'Kimi': 'Kimi',
+            'KKTIX': 'KKTIX',
+            'Brevo': 'Brevo',
+            'Supercell': 'Supercell',
+            'Air India': 'Air India',
+            'Anthropic': 'Anthropic',
+            'Atlas Earth': 'Atlas Earth',
+            'Chubb': 'Chubb',
+            'COYO': 'COYO',
+            'Coze': 'Coze',
+            'DeepSeek': 'DeepSeek'
+        };
+        
         this.init();
     }
 
+    // Translate service name to Thai
+    translateServiceName(serviceName) {
+        return this.serviceTranslations[serviceName] || serviceName;
+    }
+
     init() {
-        console.log('🚀 SMS Verification Service started');
+        console.log('🚀 บริการรับ SMS เริ่มทำงาน');
         this.bindEvents();
         this.loadInitialData();
         this.startTimer();
@@ -40,7 +149,7 @@ class SMSVerificationService {
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                console.log(`🔄 API Call attempt ${attempt}/${maxRetries}: ${url}`);
+                console.log(`🔄 เรียก API ครั้งที่ ${attempt}/${maxRetries}: ${url}`);
                 
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), this.requestTimeout);
@@ -69,16 +178,16 @@ class SMSVerificationService {
                     throw new Error('Request rate limit exceeded');
                 }
                 
-                console.log(`✅ API Call successful on attempt ${attempt}`);
+                console.log(`✅ เรียก API สำเร็จในครั้งที่ ${attempt}`);
                 return data;
                 
             } catch (error) {
                 lastError = error;
-                console.warn(`⚠️ API Call attempt ${attempt} failed:`, error.message);
+                console.warn(`⚠️ เรียก API ครั้งที่ ${attempt} ล้มเหลว:`, error.message);
                 
                 if (attempt < maxRetries) {
                     const delay = this.retryDelay * attempt; // Exponential backoff
-                    console.log(`⏳ Retrying in ${delay}ms...`);
+                    console.log(`⏳ รอ ${delay}ms แล้วลองใหม่...`);
                     await this.sleep(delay);
                 }
             }
@@ -120,7 +229,7 @@ class SMSVerificationService {
     async loadInitialData() {
         try {
             this.showLoading();
-            console.log('📡 Loading initial data...');
+            console.log('📡 กำลังโหลดข้อมูลเริ่มต้น...');
             
             // Try to load from API first
             try {
@@ -152,24 +261,24 @@ class SMSVerificationService {
 
     async loadCountries() {
         try {
-            console.log('🌍 Loading countries...');
-            this.showLoading('Loading countries...');
+            console.log('🌍 กำลังโหลดประเทศ...');
+            this.showLoading('กำลังโหลดประเทศ...');
             
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getCountryAndOperators&lang=${this.LANG}`;
             const data = await this.makeApiCall(url);
             
-            console.log('Countries response:', data);
+            console.log('การตอบสนองประเทศ:', data);
             const countries = JSON.parse(data);
             this.countriesData = countries;
             
             this.updateCountrySelect(countries);
             this.updateStatistics();
             
-            console.log(`✅ Loaded ${countries.length} countries`);
+            console.log(`✅ โหลดประเทศ ${countries.length} ประเทศ`);
             this.hideLoading();
             
         } catch (error) {
-            console.error('❌ Error loading countries:', error);
+            console.error('❌ ข้อผิดพลาดในการโหลดประเทศ:', error);
             this.hideLoading();
             throw error;
         }
@@ -198,11 +307,11 @@ class SMSVerificationService {
 
     async loadOperators(countryId) {
         try {
-            console.log(`📱 Loading operators for country ${countryId}...`);
+            console.log(`📱 กำลังโหลดผู้ให้บริการสำหรับประเทศ ${countryId}...`);
             
             const country = this.countriesData.find(c => c.id === countryId);
             if (!country) {
-                throw new Error('Country not found');
+                throw new Error('ไม่พบประเทศ');
             }
             
             const operators = Object.keys(country.operators).map(key => ({
@@ -220,23 +329,23 @@ class SMSVerificationService {
             // Load services for this country
             await this.loadServices(countryId, 'any');
             
-            console.log(`✅ Loaded ${operators.length} operators`);
+            console.log(`✅ โหลดผู้ให้บริการ ${operators.length} รายการ`);
             
         } catch (error) {
-            console.error('❌ Error loading operators:', error);
+            console.error('❌ ข้อผิดพลาดในการโหลดผู้ให้บริการ:', error);
             throw error;
         }
     }
 
     async loadServices(countryId, operatorId) {
         try {
-            console.log(`🔧 Loading services for country ${countryId}, operator ${operatorId}...`);
-            this.showLoading('Loading services...');
+            console.log(`🔧 กำลังโหลดบริการสำหรับประเทศ ${countryId}, ผู้ให้บริการ ${operatorId}...`);
+            this.showLoading('กำลังโหลดบริการ...');
             
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getServicesAndCost&country=${countryId}&operator=${operatorId}&lang=${this.LANG}`;
             const data = await this.makeApiCall(url);
             
-            console.log('Services response:', data);
+            console.log('การตอบสนองบริการ:', data);
             const services = JSON.parse(data);
             this.servicesData = services;
             this.filteredServices = [...services];
@@ -244,28 +353,28 @@ class SMSVerificationService {
             this.updateServicesDisplay();
             this.updateStatistics();
             
-            console.log(`✅ Loaded ${services.length} services`);
+            console.log(`✅ โหลดบริการ ${services.length} รายการ`);
             this.hideLoading();
             
         } catch (error) {
-            console.error('❌ Error loading services:', error);
+            console.error('❌ ข้อผิดพลาดในการโหลดบริการ:', error);
             throw error;
         }
     }
 
     async loadBalance() {
         try {
-            console.log('💰 Loading balance...');
+            console.log('💰 กำลังโหลดยอดเงิน...');
             
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getBalance&lang=${this.LANG}`;
             const balance = await this.makeApiCall(url);
             
-            console.log('Balance response:', balance);
+            console.log('การตอบสนองยอดเงิน:', balance);
             this.userBalance = parseFloat(balance);
-            console.log(`✅ Balance: $${this.userBalance}`);
+            console.log(`✅ ยอดเงิน: $${this.userBalance}`);
             
         } catch (error) {
-            console.error('❌ Error loading balance:', error);
+            console.error('❌ ข้อผิดพลาดในการโหลดยอดเงิน:', error);
             this.userBalance = 0;
         }
     }
@@ -307,7 +416,7 @@ class SMSVerificationService {
         const showMoreBtn = document.getElementById('showMoreBtn');
         
         if (this.filteredServices.length === 0) {
-            container.innerHTML = '<div class="loading">No services available</div>';
+            container.innerHTML = '<div class="loading">ไม่มีบริการที่พร้อมใช้งาน</div>';
             showMoreBtn.style.display = 'none';
             return;
         }
@@ -334,28 +443,28 @@ class SMSVerificationService {
         
         // Determine service status
         let status = 'available';
-        let statusText = 'Available';
+        let statusText = 'พร้อมใช้งาน';
         
         if (quantity === 0) {
             status = 'out-of-stock';
-            statusText = 'Out of Stock';
+            statusText = 'หมดสต็อก';
         } else if (quantity < 10) {
             status = 'low-stock';
-            statusText = 'Low Stock';
+            statusText = 'สต็อกน้อย';
         }
         
         card.innerHTML = `
             <div class="service-header">
                 <div>
-                    <div class="service-name">${service.name}</div>
-                    <div class="service-quantity">${quantity} numbers available</div>
+                    <div class="service-name">${this.translateServiceName(service.name)}</div>
+                    <div class="service-quantity">มีหมายเลข ${quantity} หมายเลข</div>
                     <div class="service-status ${status}">${statusText}</div>
                 </div>
                 <div class="service-price">$${price.toFixed(2)}</div>
             </div>
             <div class="service-actions">
                 <button class="btn-buy" ${!isAvailable ? 'disabled' : ''} data-service='${JSON.stringify(service)}'>
-                    ${isAvailable ? 'Buy' : 'Out of Stock'}
+                    ${isAvailable ? 'ซื้อ' : 'หมดสต็อก'}
                 </button>
             </div>
         `;
@@ -382,7 +491,7 @@ class SMSVerificationService {
             this.loadOperators(countryId);
         } catch (error) {
             console.error('❌ Error:', error);
-            this.showMessage('❌ Failed to load data', 'error');
+            this.showMessage('❌ ไม่สามารถโหลดข้อมูลได้', 'error');
         }
     }
 
@@ -394,7 +503,7 @@ class SMSVerificationService {
                 this.loadServices(this.currentCountry, operatorId);
             } catch (error) {
                 console.error('❌ Error:', error);
-                this.showMessage('❌ Failed to load data', 'error');
+                this.showMessage('❌ ไม่สามารถโหลดข้อมูลได้', 'error');
             }
         }
     }
@@ -435,18 +544,18 @@ class SMSVerificationService {
     }
 
     async handleBuyService(service) {
-        console.log('🛒 Buying service:', service);
+        console.log('🛒 กำลังซื้อบริการ:', service);
         
         try {
             // Call real API to get number
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getNumber&service=${service.id}&operator=${this.currentOperator}&country=${this.currentCountry}&lang=${this.LANG}`;
             
-            console.log('📡 Calling API:', url);
+            console.log('📡 เรียก API:', url);
             const result = await this.makeApiCall(url);
-            console.log('📄 API Response:', result);
+            console.log('📄 การตอบสนอง API:', result);
             
             if (result.includes('NO_BALANCE')) {
-                this.showMessage('Insufficient balance', 'error');
+                this.showMessage('ยอดเงินไม่เพียงพอ', 'error');
                 return;
             }
             
@@ -458,7 +567,7 @@ class SMSVerificationService {
             
             if (result.includes('WRONG_MAX_PRICE')) {
                 const minPrice = result.split(':')[1];
-                this.showMessage(`Price too low. Minimum price: $${minPrice}`, 'error');
+                this.showMessage(`ราคาต่ำเกินไป ราคาขั้นต่ำ: $${minPrice}`, 'error');
                 return;
             }
             
@@ -475,7 +584,7 @@ class SMSVerificationService {
                     status: 'waiting',
                     startTime: new Date(),
                     endTime: new Date(Date.now() + 20 * 60 * 1000), // 20 minutes
-                    country: this.countriesData.find(c => c.id === this.currentCountry)?.name || 'Unknown'
+                    country: this.countriesData.find(c => c.id === this.currentCountry)?.name || 'ไม่ทราบ'
                 };
                 
                 this.activations.push(activation);
@@ -484,23 +593,23 @@ class SMSVerificationService {
                 // Scroll to activation section
                 this.scrollToActivationSection();
                 
-                this.showMessage(`Service purchased: ${service.name}`, 'success');
+                this.showMessage(`ซื้อบริการสำเร็จ: ${service.name}`, 'success');
                 
                 // Update balance after purchase
                 this.loadBalance();
                 
             } else {
-                this.showMessage(`Unexpected response: ${result}`, 'error');
+                this.showMessage(`การตอบสนองไม่คาดคิด: ${result}`, 'error');
             }
             
         } catch (error) {
-            console.error('❌ Error buying service:', error);
-            this.showMessage(`Error: ${error.message}`, 'error');
+            console.error('❌ ข้อผิดพลาดในการซื้อบริการ:', error);
+            this.showMessage(`ข้อผิดพลาด: ${error.message}`, 'error');
         }
     }
 
     async handleNoNumbersAvailable(service) {
-        console.log('🔄 No numbers available, refreshing prices...');
+        console.log('🔄 ไม่มีหมายเลขที่ใช้ได้ กำลังอัปเดตราคา...');
         
         // Show loading modal
         this.showPriceRefreshModal();
@@ -509,9 +618,9 @@ class SMSVerificationService {
             // Get updated prices for this specific service
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getServicesAndCost&country=${this.currentCountry}&operator=${this.currentOperator}&lang=${this.LANG}`;
             
-            console.log('📡 Refreshing prices:', url);
+            console.log('📡 กำลังอัปเดตราคา:', url);
             const data = await this.makeApiCall(url);
-            console.log('📄 Updated prices response:', data);
+            console.log('📄 การตอบสนองราคาที่อัปเดต:', data);
             
             if (data.includes('BAD_KEY')) {
                 throw new Error('Invalid API key');
@@ -522,7 +631,7 @@ class SMSVerificationService {
             
             if (!updatedService) {
                 this.hidePriceRefreshModal();
-                this.showMessage('Service not found in updated prices', 'error');
+                this.showMessage('ไม่พบบริการในราคาที่อัปเดต', 'error');
                 return;
             }
             
@@ -538,9 +647,9 @@ class SMSVerificationService {
             }
             
         } catch (error) {
-            console.error('❌ Error refreshing prices:', error);
+            console.error('❌ ข้อผิดพลาดในการอัปเดตราคา:', error);
             this.hidePriceRefreshModal();
-            this.showMessage(`Failed to refresh prices: ${error.message}`, 'error');
+            this.showMessage(`ไม่สามารถอัปเดตราคาได้: ${error.message}`, 'error');
         }
     }
 
@@ -557,7 +666,7 @@ class SMSVerificationService {
                     <div class="loading-spinner">
                         <i class="fas fa-spinner fa-spin"></i>
                     </div>
-                    <p>Getting latest prices for ${this.currentCountry ? this.countriesData.find(c => c.id === this.currentCountry)?.name : 'selected country'}...</p>
+                    <p>กำลังดึงราคาล่าสุดสำหรับ ${this.currentCountry ? this.countriesData.find(c => c.id === this.currentCountry)?.name : 'ประเทศที่เลือก'}...</p>
                 </div>
             </div>
         `;
@@ -602,42 +711,42 @@ class SMSVerificationService {
             
             let changeText = '';
             if (priceChanged && quantityChanged) {
-                changeText = `Price: $${oldPrice.toFixed(2)} → $${newPrice.toFixed(2)}<br>Available: ${oldQuantity} → ${newQuantity}`;
+                changeText = `ราคา: $${oldPrice.toFixed(2)} → $${newPrice.toFixed(2)}<br>จำนวนที่มี: ${oldQuantity} → ${newQuantity}`;
             } else if (priceChanged) {
-                changeText = `Price: $${oldPrice.toFixed(2)} → $${newPrice.toFixed(2)}`;
+                changeText = `ราคา: $${oldPrice.toFixed(2)} → $${newPrice.toFixed(2)}`;
             } else if (quantityChanged) {
-                changeText = `Available: ${oldQuantity} → ${newQuantity}`;
+                changeText = `จำนวนที่มี: ${oldQuantity} → ${newQuantity}`;
             } else {
-                changeText = 'No changes detected';
+                changeText = 'ไม่พบการเปลี่ยนแปลง';
             }
             
             modal.innerHTML = `
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h3>Price Updated</h3>
+                        <h3>ราคาอัปเดตแล้ว</h3>
                     </div>
                     <div class="modal-body">
                         <div class="service-info">
-                            <h4>${newService.name}</h4>
+                            <h4>${this.translateServiceName(newService.name)}</h4>
                             <div class="price-info">
                                 <div class="current-price">$${newPrice.toFixed(2)}</div>
-                                <div class="quantity-info">${newQuantity} numbers available</div>
+                                <div class="quantity-info">มีหมายเลข ${newQuantity} หมายเลข</div>
                             </div>
-                            ${changeText !== 'No changes detected' ? `
+                            ${changeText !== 'ไม่พบการเปลี่ยนแปลง' ? `
                                 <div class="changes">
-                                    <strong>Changes:</strong><br>
+                                    <strong>การเปลี่ยนแปลง:</strong><br>
                                     ${changeText}
                                 </div>
                             ` : ''}
                         </div>
-                        <p>Would you like to purchase this service at the updated price?</p>
+                        <p>คุณต้องการซื้อบริการนี้ในราคาที่อัปเดตแล้วหรือไม่?</p>
                     </div>
                     <div class="modal-footer">
                         <button class="btn btn-outline" onclick="this.closest('.modal').remove(); window.smsService.resolvePriceUpdate(false);">
-                            Cancel
+                            ยกเลิก
                         </button>
                         <button class="btn btn-primary" onclick="this.closest('.modal').remove(); window.smsService.resolvePriceUpdate(true);">
-                            Buy Now
+                            ซื้อเลย
                         </button>
                     </div>
                 </div>
@@ -668,20 +777,20 @@ class SMSVerificationService {
         try {
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getStatus&id=${activationId}&lang=${this.LANG}`;
             const result = await this.makeApiCall(url);
-            console.log('📄 Status response:', result);
+            console.log('📄 การตอบสนองสถานะ:', result);
             
             if (result === 'STATUS_WAIT_CODE') {
-                this.showMessage('Still waiting for SMS', 'info');
+                this.showMessage('ยังรอรับ SMS อยู่', 'info');
                 return { status: 'waiting', code: null };
             } else if (result === 'STATUS_CANCEL') {
-                this.showMessage('Activation was cancelled', 'info');
+                this.showMessage('การใช้งานถูกยกเลิก', 'info');
                 // Remove from activations
                 this.activations = this.activations.filter(a => a.id !== parseInt(activationId));
                 this.updateActivationsDisplay();
                 return { status: 'cancelled', code: null };
             } else if (result.startsWith('STATUS_OK:')) {
                 const code = result.split(':')[1];
-                this.showMessage(`SMS received! Code: ${code}`, 'success');
+                this.showMessage(`ได้รับ SMS แล้ว! รหัส: ${code}`, 'success');
                 
                 // Update activation status
                 const activation = this.activations.find(a => a.id === parseInt(activationId));
@@ -694,12 +803,12 @@ class SMSVerificationService {
                 return { status: 'completed', code: code };
             }
             
-            this.showMessage(`Unknown status: ${result}`, 'error');
+            this.showMessage(`สถานะไม่ทราบ: ${result}`, 'error');
             return { status: 'unknown', code: null };
             
         } catch (error) {
-            console.error('❌ Error checking status:', error);
-            this.showMessage(`Error: ${error.message}`, 'error');
+            console.error('❌ ข้อผิดพลาดในการตรวจสอบสถานะ:', error);
+            this.showMessage(`ข้อผิดพลาด: ${error.message}`, 'error');
             return { status: 'error', code: null };
         }
     }
@@ -708,22 +817,22 @@ class SMSVerificationService {
         try {
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=setStatus&id=${activationId}&status=8&lang=${this.LANG}`;
             const result = await this.makeApiCall(url);
-            console.log('📄 Cancel response:', result);
+            console.log('📄 การตอบสนองการยกเลิก:', result);
             
             if (result === 'ACCESS_CANCEL') {
                 // Remove from activations
                 this.activations = this.activations.filter(a => a.id !== parseInt(activationId));
                 this.updateActivationsDisplay();
-                this.showMessage('Activation cancelled', 'success');
+                this.showMessage('ยกเลิกการใช้งานแล้ว', 'success');
             } else if (result === 'CANNOT_BEFORE_2_MIN') {
-                this.showMessage('Cannot cancel before 2 minutes', 'error');
+                this.showMessage('ไม่สามารถยกเลิกได้ภายใน 2 นาที', 'error');
             } else {
-                this.showMessage(`Cancel failed: ${result}`, 'error');
+                this.showMessage(`การยกเลิกล้มเหลว: ${result}`, 'error');
             }
             
         } catch (error) {
             console.error('❌ Error cancelling activation:', error);
-            this.showMessage(`Error: ${error.message}`, 'error');
+            this.showMessage(`ข้อผิดพลาด: ${error.message}`, 'error');
         }
     }
 
@@ -731,17 +840,17 @@ class SMSVerificationService {
         try {
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=setStatus&id=${activationId}&status=3&lang=${this.LANG}`;
             const result = await this.makeApiCall(url);
-            console.log('📄 Request SMS response:', result);
+            console.log('📄 การตอบสนองขอ SMS:', result);
             
             if (result === 'ACCESS_RETRY_GET') {
-                this.showMessage('Waiting for new SMS', 'success');
+                this.showMessage('รอรับ SMS ใหม่', 'success');
             } else {
-                this.showMessage(`Request failed: ${result}`, 'error');
+                this.showMessage(`การร้องขอล้มเหลว: ${result}`, 'error');
             }
             
         } catch (error) {
             console.error('❌ Error requesting SMS:', error);
-            this.showMessage(`Error: ${error.message}`, 'error');
+            this.showMessage(`ข้อผิดพลาด: ${error.message}`, 'error');
         }
     }
 
@@ -767,7 +876,7 @@ class SMSVerificationService {
             if (timeLeft <= 0 && activation.status === 'waiting') {
                 // Time expired, mark as expired
                 activation.status = 'expired';
-                this.showMessage(`Time expired for ${activation.service.name}`, 'error');
+                this.showMessage(`หมดเวลาสำหรับ ${this.translateServiceName(activation.service.name)}`, 'error');
             }
             
             if (activation.status === 'waiting' || activation.status === 'expired') {
@@ -788,8 +897,8 @@ class SMSVerificationService {
             container.innerHTML = `
                 <div class="no-activations">
                     <i class="fas fa-mobile-alt"></i>
-                    <p>No active numbers yet</p>
-                    <p>Buy a service above to get started</p>
+                    <p>ยังไม่มีหมายเลขที่ใช้งาน</p>
+                    <p>ซื้อบริการด้านบนเพื่อเริ่มต้น</p>
                 </div>
             `;
             return;
@@ -817,23 +926,23 @@ class SMSVerificationService {
         
         switch (activation.status) {
             case 'waiting':
-                statusText = 'Waiting for SMS';
+                statusText = 'รอรับ SMS';
                 statusIcon = 'fas fa-clock';
                 break;
             case 'completed':
-                statusText = 'SMS Received';
+                statusText = 'ได้รับ SMS';
                 statusIcon = 'fas fa-check-circle';
                 break;
             case 'expired':
-                statusText = 'Time Expired';
+                statusText = 'หมดเวลา';
                 statusIcon = 'fas fa-exclamation-triangle';
                 break;
             case 'cancelled':
-                statusText = 'Cancelled';
+                statusText = 'ยกเลิกแล้ว';
                 statusIcon = 'fas fa-times-circle';
                 break;
             default:
-                statusText = 'Unknown';
+                statusText = 'ไม่ทราบ';
                 statusIcon = 'fas fa-question-circle';
         }
         
@@ -848,8 +957,8 @@ class SMSVerificationService {
                 <div class="activation-info">
                     <div class="country-flag">🇹🇭</div>
                     <div class="activation-details">
-                        <h3>${activation.service.name}</h3>
-                        <p>${activation.country} • ${activation.currentOperator || 'Random'}</p>
+                        <h3>${this.translateServiceName(activation.service.name)}</h3>
+                        <p>${activation.country} • ${activation.currentOperator || 'สุ่ม'}</p>
                     </div>
                 </div>
                 <div class="activation-status ${statusClass}">
@@ -863,24 +972,24 @@ class SMSVerificationService {
             ${activation.smsCode ? `
                 <div class="sms-code">
                     <i class="fas fa-key"></i>
-                    SMS Code: <strong>${activation.smsCode}</strong>
+                    รหัส SMS: <strong>${activation.smsCode}</strong>
                 </div>
             ` : activation.status === 'expired' ? `
                 <div class="activation-timer expired">
                     <i class="fas fa-exclamation-triangle"></i>
-                    Time expired - No SMS received
+                    หมดเวลา - ไม่ได้รับ SMS
                 </div>
             ` : `
                 <div class="activation-timer">
                     <i class="fas fa-hourglass-half"></i>
-                    Time remaining: ${timeLeft}:${secondsLeft.toString().padStart(2, '0')}
+                    เวลาที่เหลือ: ${timeLeft}:${secondsLeft.toString().padStart(2, '0')}
                 </div>
             `}
             
             ${!canCancel && activation.status === 'waiting' ? `
                 <div class="cooldown-warning">
                     <i class="fas fa-exclamation-triangle"></i>
-                    <span>Wait ${remainingTime}s before cancel/request actions</span>
+                    <span>รอ ${remainingTime} วินาที ก่อนที่จะยกเลิก/ขอ SMS</span>
                 </div>
             ` : ''}
             
@@ -889,17 +998,17 @@ class SMSVerificationService {
                         onclick="${canCancel ? `window.smsService.cancelActivation(${activation.id})` : 'return false'}"
                         ${!canCancel ? 'disabled' : ''}>
                     <i class="fas fa-times"></i>
-                    Cancel
+                    ยกเลิก
                 </button>
                 <button class="btn btn-outline" onclick="window.smsService.checkActivationStatus(${activation.id})">
                     <i class="fas fa-sync"></i>
-                    Check Status
+                    ตรวจสอบสถานะ
                 </button>
                 <button class="btn btn-success ${!canCancel ? 'disabled' : ''}" 
                         onclick="${canCancel ? `window.smsService.requestAnotherSMS(${activation.id})` : 'return false'}"
                         ${!canCancel ? 'disabled' : ''}>
                     <i class="fas fa-sms"></i>
-                    Request Another SMS
+                    ขอ SMS อีก
                 </button>
         </div>
         `;
@@ -917,7 +1026,7 @@ class SMSVerificationService {
 
     async cancelActivation(activationId) {
         try {
-            console.log('Cancelling activation:', activationId);
+            console.log('กำลังยกเลิกการใช้งาน:', activationId);
             
             // Convert string to number for comparison
             const id = parseInt(activationId);
@@ -930,48 +1039,48 @@ class SMSVerificationService {
                 
                 if (timeSinceOrder < twoMinutes) {
                     const remainingTime = Math.ceil((twoMinutes - timeSinceOrder) / 1000);
-                    this.showMessage(`Cannot cancel before 2 minutes. Wait ${remainingTime} seconds more.`, 'error');
+                    this.showMessage(`ไม่สามารถยกเลิกได้ภายใน 2 นาที รออีก ${remainingTime} วินาที`, 'error');
                     return;
                 }
             }
             
             const result = await this.makeApiCall(`${this.API_BASE_URL}?api_key=${this.API_KEY}&action=setStatus&id=${activationId}&status=8&lang=${this.LANG}`);
             
-            console.log('Cancel response:', result);
+            console.log('การตอบสนองการยกเลิก:', result);
             
             if (result === 'ACCESS_CANCEL') {
                 // Remove from local array - ensure both are numbers for comparison
                 const idToRemove = parseInt(activationId);
                 this.activations = this.activations.filter(a => a.id !== idToRemove);
                 this.updateActivationsDisplay();
-                this.showMessage('Activation cancelled successfully', 'success');
+                this.showMessage('ยกเลิกการใช้งานสำเร็จ', 'success');
             } else if (result === 'CANNOT_BEFORE_2_MIN') {
-                this.showMessage('Cannot cancel before 2 minutes', 'error');
+                this.showMessage('ไม่สามารถยกเลิกได้ภายใน 2 นาที', 'error');
             } else if (result === 'BAD_STATUS') {
                 // Activation already cancelled or invalid status
                 const idToRemove = parseInt(activationId);
                 this.activations = this.activations.filter(a => a.id !== idToRemove);
                 this.updateActivationsDisplay();
-                this.showMessage('Activation was already cancelled', 'info');
+                this.showMessage('การใช้งานถูกยกเลิกไปแล้ว', 'info');
             } else {
-                this.showMessage(`Cancel failed: ${result}`, 'error');
+                this.showMessage(`การยกเลิกล้มเหลว: ${result}`, 'error');
             }
         } catch (error) {
-            console.error('Error cancelling activation:', error);
-            this.showMessage(`Failed to cancel activation: ${error.message}`, 'error');
+            console.error('ข้อผิดพลาดในการยกเลิกการใช้งาน:', error);
+            this.showMessage(`ไม่สามารถยกเลิกการใช้งานได้: ${error.message}`, 'error');
         }
     }
 
     async checkActivationStatus(activationId) {
         try {
-            console.log('Checking status for activation:', activationId);
+            console.log('กำลังตรวจสอบสถานะการใช้งาน:', activationId);
             
             // Convert string to number for comparison
             const id = parseInt(activationId);
             
             const result = await this.makeApiCall(`${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getStatus&id=${activationId}&lang=${this.LANG}`);
             
-            console.log('Status response:', result);
+            console.log('การตอบสนองสถานะ:', result);
             
             const idToFind = parseInt(activationId);
             const activation = this.activations.find(a => a.id === idToFind);
@@ -980,27 +1089,27 @@ class SMSVerificationService {
                     const smsCode = result.split(':')[1];
                     activation.status = 'completed';
                     activation.smsCode = smsCode;
-                    this.showMessage(`SMS received! Code: ${smsCode}`, 'success');
+                    this.showMessage(`ได้รับ SMS แล้ว! รหัส: ${smsCode}`, 'success');
                 } else if (result === 'STATUS_WAIT_CODE') {
                     activation.status = 'waiting';
-                    this.showMessage('Still waiting for SMS', 'info');
+                    this.showMessage('ยังรอรับ SMS อยู่', 'info');
                 } else if (result === 'STATUS_CANCEL') {
                     activation.status = 'cancelled';
-                    this.showMessage('Activation was cancelled', 'info');
+                    this.showMessage('การใช้งานถูกยกเลิก', 'info');
                 } else {
-                    this.showMessage(`Status: ${result}`, 'info');
+                    this.showMessage(`สถานะ: ${result}`, 'info');
                 }
                 this.updateActivationsDisplay();
             }
         } catch (error) {
-            console.error('Error checking status:', error);
-            this.showMessage('Failed to check status', 'error');
+            console.error('ข้อผิดพลาดในการตรวจสอบสถานะ:', error);
+            this.showMessage('ไม่สามารถตรวจสอบสถานะได้', 'error');
         }
     }
 
     async requestAnotherSMS(activationId) {
         try {
-            console.log('Requesting another SMS for activation:', activationId);
+            console.log('กำลังขอ SMS อีกสำหรับการใช้งาน:', activationId);
             
             // Convert string to number for comparison
             const id = parseInt(activationId);
@@ -1013,14 +1122,14 @@ class SMSVerificationService {
                 
                 if (timeSinceOrder < twoMinutes) {
                     const remainingTime = Math.ceil((twoMinutes - timeSinceOrder) / 1000);
-                    this.showMessage(`Cannot request another SMS before 2 minutes. Wait ${remainingTime} seconds more.`, 'error');
+                    this.showMessage(`ไม่สามารถขอ SMS อีกได้ภายใน 2 นาที รออีก ${remainingTime} วินาที`, 'error');
                     return;
                 }
             }
             
             const result = await this.makeApiCall(`${this.API_BASE_URL}?api_key=${this.API_KEY}&action=setStatus&id=${activationId}&status=3&lang=${this.LANG}`);
             
-            console.log('Request SMS response:', result);
+            console.log('การตอบสนองขอ SMS:', result);
             
             if (result === 'ACCESS_RETRY_GET') {
                 const idToFind = parseInt(activationId);
@@ -1030,14 +1139,14 @@ class SMSVerificationService {
                     activation.startTime = new Date();
                     activation.endTime = new Date(Date.now() + 20 * 60 * 1000);
                     this.updateActivationsDisplay();
-                    this.showMessage('Another SMS requested successfully', 'success');
+                    this.showMessage('ขอ SMS อีกสำเร็จ', 'success');
                 }
             } else {
-                this.showMessage(`Request failed: ${result}`, 'error');
+                this.showMessage(`การร้องขอล้มเหลว: ${result}`, 'error');
             }
         } catch (error) {
-            console.error('Error requesting another SMS:', error);
-            this.showMessage(`Failed to request another SMS: ${error.message}`, 'error');
+            console.error('ข้อผิดพลาดในการขอ SMS อีก:', error);
+            this.showMessage(`ไม่สามารถขอ SMS อีกได้: ${error.message}`, 'error');
         }
     }
 
@@ -1045,7 +1154,7 @@ class SMSVerificationService {
 
     // Load Fallback Data
     loadFallbackData() {
-        console.log('📋 Loading fallback data...');
+        console.log('📋 กำลังโหลดข้อมูลสำรอง...');
         
         // Fallback countries with operators
         this.countriesData = [
@@ -1147,7 +1256,7 @@ class SMSVerificationService {
             balanceDisplay.textContent = 'Balance: $1.71';
         }
         
-        console.log('✅ Fallback data loaded');
+        console.log('✅ โหลดข้อมูลสำรองเสร็จสิ้น');
     }
 
     showLoading(message = 'Loading...') {
@@ -1169,7 +1278,7 @@ class SMSVerificationService {
         if (overlay) {
             overlay.classList.remove('active');
         }
-        console.log('✅ Loading completed');
+        console.log('✅ โหลดเสร็จสิ้น');
     }
 
     showMessage(message, type) {

@@ -1,770 +1,966 @@
-// Import API functions
-import { getCountries, getOperatorsByCountry, getServicesAndCost, getRecommendedServices } from '../api/countries.js';
-import { getOperators } from '../api/operators.js';
-import { getServicesAndCost as getServices, getServicesByCategory, getAvailableServices } from '../api/services.js';
-import { getServiceStatistics, getServicePricing, getServiceStatus, getServiceRecommendations } from '../api/statistics.js';
-import { validateServiceAvailability, checkServiceStatus, validateServiceForPurchase } from '../api/validation.js';
-
-// DOM Elements
-const authBtn = document.getElementById('authBtn');
-const authModal = document.getElementById('authModal');
-const closeAuthModal = document.getElementById('closeAuthModal');
-const topupModal = document.getElementById('topupModal');
-const closeTopupModal = document.getElementById('closeTopupModal');
-
-// Auth Modal Elements
-const loginForm = document.getElementById('loginForm');
-const registerForm = document.getElementById('registerForm');
-const tabBtns = document.querySelectorAll('.tab-btn');
-
-// Service Elements
-const filterBtns = document.querySelectorAll('.filter-btn');
-const serviceCards = document.querySelectorAll('.service-card');
-const buyBtns = document.querySelectorAll('.buy-btn');
-
-// Country and Operator Selectors
-const countrySelect = document.getElementById('countrySelect');
-const operatorSelect = document.getElementById('operatorSelect');
-
-// Top-up Elements
-const topupAmount = document.getElementById('topupAmount');
-const slipUpload = document.getElementById('slipUpload');
-
-// Modal Functions
-function openModal(modal) {
-    modal.classList.add('show');
-    document.body.style.overflow = 'hidden';
-}
-
-function closeModal(modal) {
-    modal.classList.remove('show');
-    document.body.style.overflow = 'auto';
-}
-
-// Auth Modal Event Listeners
-authBtn.addEventListener('click', () => {
-    openModal(authModal);
-});
-
-closeAuthModal.addEventListener('click', () => {
-    closeModal(authModal);
-});
-
-// Close modal when clicking outside
-authModal.addEventListener('click', (e) => {
-    if (e.target === authModal) {
-        closeModal(authModal);
+// SMS Verification Service - Main Script
+class SMSVerificationService {
+    constructor() {
+        this.API_BASE_URL = '/api';
+        this.API_KEY = '7ccb326980edc2bfec78dcd66326aad7';
+        this.LANG = 'en';
+        
+        this.countriesData = [];
+        this.operatorsData = [];
+        this.servicesData = [];
+        this.filteredServices = [];
+        this.currentCountry = null;
+        this.currentOperator = 'any';
+        this.userBalance = 0;
+        this.activations = [];
+        this.servicesToShow = 999999; // Show all services
+        this.maxServicesToShow = 999999;
+        this.timerInterval = null; // Timer for countdown
+        
+        this.init();
     }
-});
 
-// Tab switching in auth modal
-tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        const tab = btn.dataset.tab;
-        
-        // Update active tab
-        tabBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        
-        // Show/hide forms
-        if (tab === 'login') {
-            loginForm.classList.remove('hidden');
-            registerForm.classList.add('hidden');
-        } else {
-            loginForm.classList.add('hidden');
-            registerForm.classList.remove('hidden');
-        }
-    });
-});
-
-// Auth Form Submissions
-loginForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const email = document.getElementById('loginEmail').value;
-    const password = document.getElementById('loginPassword').value;
-    
-    // TODO: Implement login logic
-    console.log('Login attempt:', { email, password });
-    
-    // For now, just close modal
-    closeModal(authModal);
-    alert('เข้าสู่ระบบสำเร็จ! (Demo)');
-});
-
-registerForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const email = document.getElementById('registerEmail').value;
-    const password = document.getElementById('registerPassword').value;
-    const confirmPassword = document.getElementById('confirmPassword').value;
-    const agreeTerms = document.getElementById('agreeTerms').checked;
-    
-    if (password !== confirmPassword) {
-        alert('รหัสผ่านไม่ตรงกัน');
-        return;
+    init() {
+        console.log('🚀 SMS Verification Service started');
+        this.bindEvents();
+        this.loadInitialData();
+        this.startTimer();
     }
-    
-    if (!agreeTerms) {
-        alert('กรุณายอมรับข้อกำหนดและเงื่อนไข');
-        return;
-    }
-    
-    // TODO: Implement registration logic
-    console.log('Registration attempt:', { email, password, agreeTerms });
-    
-    // For now, just close modal
-    closeModal(authModal);
-    alert('สมัครสมาชิกสำเร็จ! (Demo)');
-});
 
-// Service Filtering
-filterBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        const category = btn.dataset.category;
-        
-        // Update active filter
-        filterBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        
-        // Filter service cards
-        serviceCards.forEach(card => {
-            if (category === 'all' || card.dataset.category === category) {
-                card.style.display = 'flex';
-            } else {
-                card.style.display = 'none';
+    bindEvents() {
+        // Country selection
+        document.getElementById('countrySelect').addEventListener('change', (e) => {
+            this.handleCountryChange(parseInt(e.target.value));
+        });
+
+        // Operator selection
+        document.getElementById('operatorSelect').addEventListener('change', (e) => {
+            this.handleOperatorChange(e.target.value);
+        });
+
+        // Service filter
+        document.getElementById('serviceFilter').addEventListener('change', (e) => {
+            this.filterServices(e.target.value);
+        });
+
+        // Show more services - removed
+
+        // Modal events
+        document.getElementById('signInBtn').addEventListener('click', () => {
+            this.showAuthModal();
+        });
+
+        document.getElementById('signUpBtn').addEventListener('click', () => {
+            this.showAuthModal();
+        });
+
+        document.getElementById('authModalClose').addEventListener('click', () => {
+            this.hideAuthModal();
+        });
+
+        // Close modals when clicking outside
+        document.getElementById('authModal').addEventListener('click', (e) => {
+            if (e.target.id === 'authModal') {
+                this.hideAuthModal();
             }
         });
-    });
-});
 
-// Buy Button Functionality
-buyBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        // Check if user is logged in (demo)
-        const isLoggedIn = false; // TODO: Check actual login status
+        // Form submissions
+        document.getElementById('authForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleAuth();
+        });
+    }
+
+    async loadInitialData() {
+        try {
+            this.showLoading();
+            console.log('📡 Loading initial data...');
+            
+            await Promise.all([
+                this.loadCountries(),
+                this.loadBalance()
+            ]);
+            
+            // Set default country to Thailand (ID: 7)
+            this.setDefaultCountry();
+            
+            this.hideLoading();
+            this.showMessage('✅ Data loaded successfully', 'success');
+            
+        } catch (error) {
+            console.error('❌ Error loading initial data:', error);
+            this.hideLoading();
+            this.showMessage('❌ Failed to load data', 'error');
+        }
+    }
+
+    async loadCountries() {
+        try {
+            console.log('🌍 Loading countries...');
+            
+            const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getCountryAndOperators&lang=${this.LANG}`;
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.text();
+            console.log('Countries response:', data);
+            
+            if (data.includes('BAD_KEY')) {
+                throw new Error('Invalid API key');
+            }
+            
+            const countries = JSON.parse(data);
+            this.countriesData = countries;
+            
+            this.updateCountrySelect(countries);
+            this.updateStatistics();
+            
+            console.log(`✅ Loaded ${countries.length} countries`);
+            
+        } catch (error) {
+            console.error('❌ Error loading countries:', error);
+            throw error;
+        }
+    }
+
+    setDefaultCountry() {
+        // Find Thailand in the countries data
+        const thailand = this.countriesData.find(country => 
+            country.name.toLowerCase().includes('thailand') || 
+            country.name.toLowerCase().includes('thai')
+        );
         
-        if (!isLoggedIn) {
-            openModal(authModal);
+        if (thailand) {
+            this.currentCountry = thailand.id;
+            document.getElementById('countrySelect').value = thailand.id;
+            this.loadOperators(thailand.id);
+        } else {
+            // Fallback to first country
+            if (this.countriesData.length > 0) {
+                this.currentCountry = this.countriesData[0].id;
+                document.getElementById('countrySelect').value = this.countriesData[0].id;
+                this.loadOperators(this.countriesData[0].id);
+            }
+        }
+    }
+
+    async loadOperators(countryId) {
+        try {
+            console.log(`📱 Loading operators for country ${countryId}...`);
+            
+            const country = this.countriesData.find(c => c.id === countryId);
+            if (!country) {
+                throw new Error('Country not found');
+            }
+            
+            const operators = Object.keys(country.operators).map(key => ({
+                id: key,
+                name: country.operators[key]
+            }));
+            
+            this.operatorsData = operators;
+            this.updateOperatorSelect(operators);
+            
+            // Set to Random (any) by default
+            this.currentOperator = 'any';
+            document.getElementById('operatorSelect').value = 'any';
+            
+            // Load services for this country
+            await this.loadServices(countryId, 'any');
+            
+            console.log(`✅ Loaded ${operators.length} operators`);
+            
+        } catch (error) {
+            console.error('❌ Error loading operators:', error);
+            throw error;
+        }
+    }
+
+    async loadServices(countryId, operatorId) {
+        try {
+            console.log(`🔧 Loading services for country ${countryId}, operator ${operatorId}...`);
+            
+            const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getServicesAndCost&country=${countryId}&operator=${operatorId}&lang=${this.LANG}`;
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.text();
+            console.log('Services response:', data);
+            
+            if (data.includes('BAD_KEY')) {
+                throw new Error('Invalid API key');
+            }
+            
+            const services = JSON.parse(data);
+            this.servicesData = services;
+            this.filteredServices = [...services];
+            
+            this.updateServicesDisplay();
+            this.updateStatistics();
+            
+            console.log(`✅ Loaded ${services.length} services`);
+            
+        } catch (error) {
+            console.error('❌ Error loading services:', error);
+            throw error;
+        }
+    }
+
+    async loadBalance() {
+        try {
+            console.log('💰 Loading balance...');
+            
+            const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getBalance&lang=${this.LANG}`;
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const balance = await response.text();
+            console.log('Balance response:', balance);
+            
+            if (balance.includes('BAD_KEY')) {
+                throw new Error('Invalid API key');
+            }
+            
+            this.userBalance = parseFloat(balance);
+            console.log(`✅ Balance: $${this.userBalance}`);
+            
+        } catch (error) {
+            console.error('❌ Error loading balance:', error);
+            this.userBalance = 0;
+        }
+    }
+
+    updateCountrySelect(countries) {
+        const countrySelect = document.getElementById('countrySelect');
+        countrySelect.innerHTML = '';
+        
+        countries.forEach(country => {
+            const option = document.createElement('option');
+            option.value = country.id;
+            option.textContent = country.name;
+            countrySelect.appendChild(option);
+        });
+    }
+
+    updateOperatorSelect(operators) {
+        const operatorSelect = document.getElementById('operatorSelect');
+        operatorSelect.innerHTML = '';
+        
+        // Add Random option first
+        const randomOption = document.createElement('option');
+        randomOption.value = 'any';
+        randomOption.textContent = 'Random';
+        operatorSelect.appendChild(randomOption);
+        
+        operators.forEach(operator => {
+            if (operator.id !== 'any') {
+                const option = document.createElement('option');
+                option.value = operator.id;
+                option.textContent = operator.name;
+                operatorSelect.appendChild(option);
+            }
+        });
+    }
+
+    updateServicesDisplay() {
+        const container = document.getElementById('servicesGrid');
+        const showMoreBtn = document.getElementById('showMoreBtn');
+        
+        if (this.filteredServices.length === 0) {
+            container.innerHTML = '<div class="loading">No services available</div>';
+            showMoreBtn.style.display = 'none';
             return;
         }
         
-        // TODO: Check user balance and show top-up modal if needed
-        const hasEnoughBalance = true; // TODO: Check actual balance
+        // Show all services
+        container.innerHTML = '';
         
-        if (!hasEnoughBalance) {
-            openModal(topupModal);
-            return;
+        this.filteredServices.forEach(service => {
+            const serviceCard = this.createServiceCard(service);
+            container.appendChild(serviceCard);
+        });
+        
+        // Hide "Show More" button
+        showMoreBtn.style.display = 'none';
+    }
+
+    createServiceCard(service) {
+        const card = document.createElement('div');
+        card.className = 'service-card';
+        
+        const isAvailable = parseInt(service.quantity) > 0;
+        const price = parseFloat(service.price);
+        const quantity = parseInt(service.quantity);
+        
+        // Determine service status
+        let status = 'available';
+        let statusText = 'Available';
+        
+        if (quantity === 0) {
+            status = 'out-of-stock';
+            statusText = 'Out of Stock';
+        } else if (quantity < 10) {
+            status = 'low-stock';
+            statusText = 'Low Stock';
         }
         
-        // TODO: Implement purchase logic
-        console.log('Purchase attempt');
-        alert('ซื้อบริการสำเร็จ! (Demo)');
-    });
-});
-
-// Top-up Modal Event Listeners
-closeTopupModal.addEventListener('click', () => {
-    closeModal(topupModal);
-});
-
-topupModal.addEventListener('click', (e) => {
-    if (e.target === topupModal) {
-        closeModal(topupModal);
-    }
-});
-
-// Top-up Amount Selection
-topupAmount.addEventListener('change', (e) => {
-    if (e.target.value === 'custom') {
-        const customAmount = prompt('กรุณาใส่จำนวนเงินที่ต้องการเติม:');
-        if (customAmount && !isNaN(customAmount) && customAmount > 0) {
-            // TODO: Set custom amount
-            console.log('Custom amount:', customAmount);
-        }
-    }
-});
-
-// Slip Upload
-slipUpload.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-        console.log('Slip uploaded:', file.name);
-        // TODO: Implement slip verification with Thunder API
-    }
-});
-
-// Country and Operator Change Handlers
-countrySelect.addEventListener('change', async (e) => {
-    const countryId = parseInt(e.target.value);
-    console.log('Country changed to:', countryId);
-    
-    try {
-        // Update operators based on country
-        await updateOperators(countryId);
-        
-        // Reset operator selection
-        operatorSelect.value = 'any';
-        
-        // Update services
-        await updateServices(countryId, 'any');
-    } catch (error) {
-        console.error('Error updating operators:', error);
-        showError('ไม่สามารถโหลดข้อมูลผู้ให้บริการได้');
-    }
-});
-
-operatorSelect.addEventListener('change', async (e) => {
-    const operator = e.target.value;
-    const countryId = parseInt(countrySelect.value);
-    console.log('Operator changed to:', operator);
-    
-    try {
-        // Update services based on operator
-        await updateServices(countryId, operator);
-    } catch (error) {
-        console.error('Error updating services:', error);
-        showError('ไม่สามารถโหลดข้อมูลบริการได้');
-    }
-});
-
-// API Integration Functions
-async function loadCountries() {
-    try {
-        const countries = await getCountries();
-        updateCountrySelect(countries);
-    } catch (error) {
-        console.error('Error loading countries:', error);
-        showError('ไม่สามารถโหลดข้อมูลประเทศได้');
-    }
-}
-
-async function updateOperators(countryId) {
-    try {
-        const operators = await getOperatorsByCountry(countryId);
-        updateOperatorSelect(operators);
-    } catch (error) {
-        console.error('Error updating operators:', error);
-        showError('ไม่สามารถโหลดข้อมูลผู้ให้บริการได้');
-    }
-}
-
-async function updateServices(countryId, operatorId) {
-    try {
-        // Show loading state
-        showLoadingState();
-        
-        // Get services data
-        const [services, statistics, pricing, status] = await Promise.all([
-            getServicesAndCost(countryId, operatorId),
-            getServiceStatistics(countryId, operatorId),
-            getServicePricing(countryId, operatorId),
-            getServiceStatus(countryId, operatorId)
-        ]);
-        
-        // Update service list with enhanced data
-        updateServiceList(services, statistics, pricing, status);
-        
-        // Update statistics display
-        updateStatisticsDisplay(statistics);
-        
-        // Update pricing information
-        updatePricingDisplay(pricing);
-        
-        // Update status information
-        updateStatusDisplay(status);
-        
-    } catch (error) {
-        console.error('Error updating services:', error);
-        showError('ไม่สามารถโหลดข้อมูลบริการได้');
-    } finally {
-        hideLoadingState();
-    }
-}
-
-function updateCountrySelect(countries) {
-    // Clear existing options
-    countrySelect.innerHTML = '';
-    
-    // Add default option
-    const defaultOption = document.createElement('option');
-    defaultOption.value = '';
-    defaultOption.textContent = 'เลือกประเทศ';
-    countrySelect.appendChild(defaultOption);
-    
-    // Add country options
-    countries.forEach(country => {
-        const option = document.createElement('option');
-        option.value = country.id;
-        option.textContent = country.name;
-        countrySelect.appendChild(option);
-    });
-}
-
-function updateOperatorSelect(operators) {
-    // Clear existing options
-    operatorSelect.innerHTML = '';
-    
-    // Add default option
-    const defaultOption = document.createElement('option');
-    defaultOption.value = 'any';
-    defaultOption.textContent = 'สุ่ม (Any)';
-    operatorSelect.appendChild(defaultOption);
-    
-    // Add operator options
-    operators.forEach(operator => {
-        const option = document.createElement('option');
-        option.value = operator.id;
-        option.textContent = operator.name;
-        operatorSelect.appendChild(option);
-    });
-}
-
-function updateServiceList(services, statistics, pricing, status) {
-    const serviceList = document.querySelector('.service-list');
-    
-    // Clear existing services
-    serviceList.innerHTML = '';
-    
-    if (services.length === 0) {
-        serviceList.innerHTML = `
-            <div class="empty-state">
-                <i class="fas fa-exclamation-triangle"></i>
-                <h3>ไม่มีบริการที่พร้อมใช้งาน</h3>
-                <p>กรุณาเลือกประเทศและผู้ให้บริการอื่น</p>
+        card.innerHTML = `
+            <div class="service-header">
+                <div>
+                    <div class="service-name">${service.name}</div>
+                    <div class="service-quantity">${quantity} numbers available</div>
+                    <div class="service-status ${status}">${statusText}</div>
+                </div>
+                <div class="service-price">$${price.toFixed(2)}</div>
+            </div>
+            <div class="service-actions">
+                <button class="btn-buy" ${!isAvailable ? 'disabled' : ''} data-service='${JSON.stringify(service)}'>
+                    ${isAvailable ? 'Buy' : 'Out of Stock'}
+                </button>
             </div>
         `;
-        return;
+        
+        // Add click event for buy button
+        const buyBtn = card.querySelector('.btn-buy');
+        buyBtn.addEventListener('click', () => {
+            if (isAvailable) {
+                this.handleBuyService(service);
+            }
+        });
+        
+        return card;
+    }
+
+    updateStatistics() {
+        document.getElementById('totalServices').textContent = this.filteredServices.length;
+    }
+
+    handleCountryChange(countryId) {
+        this.currentCountry = countryId;
+        
+        try {
+            this.loadOperators(countryId);
+        } catch (error) {
+            console.error('❌ Error:', error);
+            this.showMessage('❌ Failed to load data', 'error');
+        }
+    }
+
+    handleOperatorChange(operatorId) {
+        this.currentOperator = operatorId;
+        
+        if (this.currentCountry) {
+            try {
+                this.loadServices(this.currentCountry, operatorId);
+            } catch (error) {
+                console.error('❌ Error:', error);
+                this.showMessage('❌ Failed to load data', 'error');
+            }
+        }
+    }
+
+    filterServices(category) {
+        if (category === 'all') {
+            this.filteredServices = [...this.servicesData];
+        } else {
+            // Simple category filtering based on service name patterns
+            this.filteredServices = this.servicesData.filter(service => {
+                const name = service.name.toLowerCase();
+                switch (category) {
+                    case 'social':
+                        return name.includes('facebook') || name.includes('instagram') || 
+                               name.includes('twitter') || name.includes('telegram') || 
+                               name.includes('whatsapp') || name.includes('tiktok') ||
+                               name.includes('snapchat') || name.includes('discord');
+                    case 'finance':
+                        return name.includes('paypal') || name.includes('wise') || 
+                               name.includes('skrill') || name.includes('neteller') ||
+                               name.includes('binance') || name.includes('coinbase');
+                    case 'gaming':
+                        return name.includes('steam') || name.includes('discord') || 
+                               name.includes('twitch') || name.includes('blizzard') ||
+                               name.includes('epic') || name.includes('origin');
+                    case 'shopping':
+                        return name.includes('amazon') || name.includes('ebay') || 
+                               name.includes('shopee') || name.includes('lazada') ||
+                               name.includes('alibaba') || name.includes('taobao');
+                    default:
+                        return true;
+                }
+            });
+        }
+        
+        this.updateServicesDisplay();
+        this.updateStatistics();
+    }
+
+    async handleBuyService(service) {
+        console.log('🛒 Buying service:', service);
+        
+        try {
+            // Call real API to get number
+            const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getNumber&service=${service.id}&operator=${this.currentOperator}&country=${this.currentCountry}&lang=${this.LANG}`;
+            
+            console.log('📡 Calling API:', url);
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const result = await response.text();
+            console.log('📄 API Response:', result);
+            
+            if (result.includes('NO_BALANCE')) {
+                this.showMessage('Insufficient balance', 'error');
+                return;
+            }
+            
+            if (result.includes('NO_NUMBERS')) {
+                this.showMessage('No numbers available for this service', 'error');
+                return;
+            }
+            
+            if (result.includes('WRONG_MAX_PRICE')) {
+                const minPrice = result.split(':')[1];
+                this.showMessage(`Price too low. Minimum price: $${minPrice}`, 'error');
+                return;
+            }
+            
+            if (result.startsWith('ACCESS_NUMBER:')) {
+                // Parse the response: ACCESS_NUMBER:ID:NUMBER
+                const parts = result.split(':');
+                const activationId = parts[1];
+                const phoneNumber = parts[2];
+                
+                const activation = {
+                    id: parseInt(activationId), // Convert to number for consistency
+                    service: service,
+                    phoneNumber: phoneNumber,
+                    status: 'waiting',
+                    startTime: new Date(),
+                    endTime: new Date(Date.now() + 20 * 60 * 1000), // 20 minutes
+                    country: this.countriesData.find(c => c.id === this.currentCountry)?.name || 'Unknown'
+                };
+                
+                this.activations.push(activation);
+                this.updateActivationsDisplay();
+                
+                // Scroll to activation section
+                this.scrollToActivationSection();
+                
+                this.showMessage(`Service purchased: ${service.name}`, 'success');
+                
+                // Update balance after purchase
+                this.loadBalance();
+                
+            } else {
+                this.showMessage(`Unexpected response: ${result}`, 'error');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error buying service:', error);
+            this.showMessage(`Error: ${error.message}`, 'error');
+        }
+    }
+
+    async checkActivationStatus(activationId) {
+        try {
+            const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getStatus&id=${activationId}&lang=${this.LANG}`;
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const result = await response.text();
+            console.log('📄 Status response:', result);
+            
+            if (result === 'STATUS_WAIT_CODE') {
+                this.showMessage('Still waiting for SMS', 'info');
+                return { status: 'waiting', code: null };
+            } else if (result === 'STATUS_CANCEL') {
+                this.showMessage('Activation was cancelled', 'info');
+                // Remove from activations
+                this.activations = this.activations.filter(a => a.id !== parseInt(activationId));
+                this.updateActivationsDisplay();
+                return { status: 'cancelled', code: null };
+            } else if (result.startsWith('STATUS_OK:')) {
+                const code = result.split(':')[1];
+                this.showMessage(`SMS received! Code: ${code}`, 'success');
+                
+                // Update activation status
+                const activation = this.activations.find(a => a.id === parseInt(activationId));
+                if (activation) {
+                    activation.status = 'completed';
+                    activation.smsCode = code;
+                    this.updateActivationsDisplay();
+                }
+                
+                return { status: 'completed', code: code };
+            }
+            
+            this.showMessage(`Unknown status: ${result}`, 'error');
+            return { status: 'unknown', code: null };
+            
+        } catch (error) {
+            console.error('❌ Error checking status:', error);
+            this.showMessage(`Error: ${error.message}`, 'error');
+            return { status: 'error', code: null };
+        }
+    }
+
+    async cancelActivation(activationId) {
+        try {
+            const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=setStatus&id=${activationId}&status=8&lang=${this.LANG}`;
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const result = await response.text();
+            console.log('📄 Cancel response:', result);
+            
+            if (result === 'ACCESS_CANCEL') {
+                // Remove from activations
+                this.activations = this.activations.filter(a => a.id !== parseInt(activationId));
+                this.updateActivationsDisplay();
+                this.showMessage('Activation cancelled', 'success');
+            } else if (result === 'CANNOT_BEFORE_2_MIN') {
+                this.showMessage('Cannot cancel before 2 minutes', 'error');
+            } else {
+                this.showMessage(`Cancel failed: ${result}`, 'error');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error cancelling activation:', error);
+            this.showMessage(`Error: ${error.message}`, 'error');
+        }
+    }
+
+    async requestAnotherSMS(activationId) {
+        try {
+            const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=setStatus&id=${activationId}&status=3&lang=${this.LANG}`;
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const result = await response.text();
+            console.log('📄 Request SMS response:', result);
+            
+            if (result === 'ACCESS_RETRY_GET') {
+                this.showMessage('Waiting for new SMS', 'success');
+            } else {
+                this.showMessage(`Request failed: ${result}`, 'error');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error requesting SMS:', error);
+            this.showMessage(`Error: ${error.message}`, 'error');
+        }
+    }
+
+    startTimer() {
+        // Clear existing timer
+        if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+        }
+        
+        // Start new timer that updates every second
+        this.timerInterval = setInterval(() => {
+            this.updateTimers();
+        }, 1000);
     }
     
-    // Create service cards with enhanced data
-    services.forEach(service => {
-        const serviceCard = createEnhancedServiceCard(service, statistics, pricing, status);
-        serviceList.appendChild(serviceCard);
-    });
-}
-
-function createEnhancedServiceCard(service, statistics, pricing, status) {
-    const card = document.createElement('div');
-    card.className = `service-card ${service.available ? '' : 'unavailable'}`;
-    card.dataset.category = service.category;
+    updateTimers() {
+        const now = new Date();
+        let hasActiveActivations = false;
+        
+        this.activations.forEach(activation => {
+            const timeLeft = Math.max(0, Math.floor((activation.endTime - now) / 1000 / 60));
+            
+            if (timeLeft <= 0 && activation.status === 'waiting') {
+                // Time expired, mark as expired
+                activation.status = 'expired';
+                this.showMessage(`Time expired for ${activation.service.name}`, 'error');
+            }
+            
+            if (activation.status === 'waiting' || activation.status === 'expired') {
+                hasActiveActivations = true;
+            }
+        });
+        
+        // Update display if there are active activations
+        if (hasActiveActivations) {
+            this.updateActivationsDisplay();
+        }
+    }
     
-    const iconClass = getServiceIcon(service.id);
-    const priceFormatted = formatPrice(service.price);
-    const stockText = getStockText(service.quantity);
-    const statusBadge = getStatusBadge(service, status);
-    const priceRange = getPriceRange(service.price, pricing);
-    const deliverability = getDeliverabilityInfo(service, statistics);
-    
-    card.innerHTML = `
-        <div class="service-icon">
-            <i class="${iconClass}"></i>
-        </div>
-        <div class="service-info">
-            <div class="service-header">
-                <h4>${service.name}</h4>
-                ${statusBadge}
-            </div>
-            <p class="service-desc">รับ SMS สำหรับ ${service.name}</p>
-            <div class="service-meta">
-                <div class="price-info">
-                    <span class="price">${priceFormatted}</span>
-                    <span class="price-range ${priceRange}">${getPriceRangeText(priceRange)}</span>
+    updateActivationsDisplay() {
+        const container = document.getElementById('activationsList');
+        
+        if (this.activations.length === 0) {
+            container.innerHTML = `
+                <div class="no-activations">
+                    <i class="fas fa-mobile-alt"></i>
+                    <p>No active numbers yet</p>
+                    <p>Buy a service above to get started</p>
                 </div>
-                <div class="stock-info">
-                    <span class="stock">${stockText}</span>
-                    ${deliverability}
-                </div>
-            </div>
-            <div class="service-stats">
-                <div class="stat-item">
-                    <i class="fas fa-chart-line"></i>
-                    <span>${getCategoryStats(service.category, statistics)}</span>
-                </div>
-                <div class="stat-item">
-                    <i class="fas fa-clock"></i>
-                    <span>อัปเดตเมื่อ ${formatTime(new Date())}</span>
-                </div>
-            </div>
-        </div>
-        <div class="service-actions">
-            <button class="buy-btn" ${!service.available ? 'disabled' : ''}>
-                ${service.available ? 'ซื้อ' : 'หมด'}
-            </button>
-            <button class="info-btn" onclick="showServiceDetails('${service.id}')">
-                <i class="fas fa-info-circle"></i>
-            </button>
-        </div>
-    `;
-    
-    // Add event listener to buy button
-    const buyBtn = card.querySelector('.buy-btn');
-    if (service.available) {
-        buyBtn.addEventListener('click', () => {
-            handleServicePurchase(service);
+            `;
+            return;
+        }
+        
+        container.innerHTML = '';
+        
+        this.activations.forEach(activation => {
+            const activationCard = this.createActivationCard(activation);
+            container.appendChild(activationCard);
         });
     }
-    
-    return card;
-}
 
-function createServiceCard(service) {
-    const card = document.createElement('div');
-    card.className = `service-card ${service.available ? '' : 'unavailable'}`;
-    card.dataset.category = service.category;
-    
-    const iconClass = getServiceIcon(service.id);
-    const priceFormatted = formatPrice(service.price);
-    const stockText = service.available ? `${service.quantity} หมายเลข` : 'หมด';
-    
-    card.innerHTML = `
-        <div class="service-icon">
-            <i class="${iconClass}"></i>
-        </div>
-        <div class="service-info">
-            <h4>${service.name}</h4>
-            <p class="service-desc">รับ SMS สำหรับ ${service.name}</p>
-            <div class="service-meta">
-                <span class="price">${priceFormatted}</span>
-                <span class="stock">${stockText}</span>
+    createActivationCard(activation) {
+        const card = document.createElement('div');
+        card.className = 'activation-card';
+        
+        const timeLeft = Math.max(0, Math.floor((activation.endTime - new Date()) / 1000 / 60));
+        const secondsLeft = Math.max(0, Math.floor((activation.endTime - new Date()) / 1000) % 60);
+        
+        // Determine status text and icon
+        let statusText = '';
+        let statusIcon = '';
+        let statusClass = activation.status;
+        
+        switch (activation.status) {
+            case 'waiting':
+                statusText = 'Waiting for SMS';
+                statusIcon = 'fas fa-clock';
+                break;
+            case 'completed':
+                statusText = 'SMS Received';
+                statusIcon = 'fas fa-check-circle';
+                break;
+            case 'expired':
+                statusText = 'Time Expired';
+                statusIcon = 'fas fa-exclamation-triangle';
+                break;
+            case 'cancelled':
+                statusText = 'Cancelled';
+                statusIcon = 'fas fa-times-circle';
+                break;
+            default:
+                statusText = 'Unknown';
+                statusIcon = 'fas fa-question-circle';
+        }
+        
+        // Check if 2 minutes have passed for cancel/request buttons
+        const timeSinceOrder = new Date() - activation.startTime;
+        const twoMinutes = 2 * 60 * 1000; // 2 minutes in milliseconds
+        const canCancel = timeSinceOrder >= twoMinutes;
+        const remainingTime = Math.ceil((twoMinutes - timeSinceOrder) / 1000);
+        
+        card.innerHTML = `
+            <div class="activation-header-card">
+                <div class="activation-info">
+                    <div class="country-flag">🇹🇭</div>
+                    <div class="activation-details">
+                        <h3>${activation.service.name}</h3>
+                        <p>${activation.country} • ${activation.currentOperator || 'Random'}</p>
+                    </div>
+                </div>
+                <div class="activation-status ${statusClass}">
+                    <i class="${statusIcon}"></i>
+                    ${statusText}
+                </div>
             </div>
-        </div>
-        <button class="buy-btn" ${!service.available ? 'disabled' : ''}>
-            ${service.available ? 'ซื้อ' : 'หมด'}
-        </button>
-    `;
-    
-    // Add event listener to buy button
-    const buyBtn = card.querySelector('.buy-btn');
-    if (service.available) {
-        buyBtn.addEventListener('click', () => {
-            handleServicePurchase(service);
+            
+            <div class="phone-number">${activation.phoneNumber}</div>
+            
+            ${activation.smsCode ? `
+                <div class="sms-code">
+                    <i class="fas fa-key"></i>
+                    SMS Code: <strong>${activation.smsCode}</strong>
+                </div>
+            ` : activation.status === 'expired' ? `
+                <div class="activation-timer expired">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Time expired - No SMS received
+                </div>
+            ` : `
+                <div class="activation-timer">
+                    <i class="fas fa-hourglass-half"></i>
+                    Time remaining: ${timeLeft}:${secondsLeft.toString().padStart(2, '0')}
+                </div>
+            `}
+            
+            ${!canCancel && activation.status === 'waiting' ? `
+                <div class="cooldown-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Wait ${remainingTime}s before cancel/request actions</span>
+                </div>
+            ` : ''}
+            
+            <div class="activation-actions">
+                <button class="btn btn-danger ${!canCancel ? 'disabled' : ''}" 
+                        onclick="${canCancel ? `window.smsService.cancelActivation(${activation.id})` : 'return false'}"
+                        ${!canCancel ? 'disabled' : ''}>
+                    <i class="fas fa-times"></i>
+                    Cancel
+                </button>
+                <button class="btn btn-outline" onclick="window.smsService.checkActivationStatus(${activation.id})">
+                    <i class="fas fa-sync"></i>
+                    Check Status
+                </button>
+                <button class="btn btn-success ${!canCancel ? 'disabled' : ''}" 
+                        onclick="${canCancel ? `window.smsService.requestAnotherSMS(${activation.id})` : 'return false'}"
+                        ${!canCancel ? 'disabled' : ''}>
+                    <i class="fas fa-sms"></i>
+                    Request Another SMS
+                </button>
+            </div>
+        `;
+        
+        return card;
+    }
+
+    scrollToActivationSection() {
+        const activationSection = document.getElementById('activationSection');
+        activationSection.scrollIntoView({ 
+            behavior: 'smooth',
+            block: 'start'
         });
     }
-    
-    return card;
-}
 
-function getServiceIcon(serviceId) {
-    const iconMap = {
-        'fb': 'fab fa-facebook',
-        'ig': 'fab fa-instagram',
-        'wa': 'fab fa-whatsapp',
-        'tg': 'fab fa-telegram',
-        'sn': 'fab fa-snapchat',
-        'ds': 'fab fa-discord',
-        'ts': 'fab fa-paypal',
-        're': 'fab fa-bitcoin',
-        'mt': 'fab fa-steam',
-        'go': 'fab fa-google',
-        'mm': 'fab fa-microsoft'
-    };
-    
-    return iconMap[serviceId] || 'fas fa-mobile-alt';
-}
-
-// Enhanced helper functions
-function getStockText(quantity) {
-    if (quantity === 0) return 'หมด';
-    if (quantity < 5) return `${quantity} หมายเลข (น้อย)`;
-    if (quantity < 20) return `${quantity} หมายเลข (จำกัด)`;
-    return `${quantity} หมายเลข`;
-}
-
-function getStatusBadge(service, status) {
-    if (!service.available) {
-        return '<span class="status-badge unavailable">หมด</span>';
+    async cancelActivation(activationId) {
+        try {
+            console.log('Cancelling activation:', activationId);
+            
+            // Convert string to number for comparison
+            const id = parseInt(activationId);
+            
+            // Check if 2 minutes have passed
+            const activation = this.activations.find(a => a.id === id);
+            if (activation) {
+                const timeSinceOrder = new Date() - activation.startTime;
+                const twoMinutes = 2 * 60 * 1000; // 2 minutes in milliseconds
+                
+                if (timeSinceOrder < twoMinutes) {
+                    const remainingTime = Math.ceil((twoMinutes - timeSinceOrder) / 1000);
+                    this.showMessage(`Cannot cancel before 2 minutes. Wait ${remainingTime} seconds more.`, 'error');
+                    return;
+                }
+            }
+            
+            const response = await fetch(`${this.API_BASE_URL}?api_key=${this.API_KEY}&action=setStatus&id=${activationId}&status=8&lang=${this.LANG}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const result = await response.text();
+            
+            console.log('Cancel response:', result);
+            
+            if (result === 'ACCESS_CANCEL') {
+                // Remove from local array - ensure both are numbers for comparison
+                const idToRemove = parseInt(activationId);
+                this.activations = this.activations.filter(a => a.id !== idToRemove);
+                this.updateActivationsDisplay();
+                this.showMessage('Activation cancelled successfully', 'success');
+            } else if (result === 'CANNOT_BEFORE_2_MIN') {
+                this.showMessage('Cannot cancel before 2 minutes', 'error');
+            } else if (result === 'BAD_STATUS') {
+                // Activation already cancelled or invalid status
+                const idToRemove = parseInt(activationId);
+                this.activations = this.activations.filter(a => a.id !== idToRemove);
+                this.updateActivationsDisplay();
+                this.showMessage('Activation was already cancelled', 'info');
+            } else {
+                this.showMessage(`Cancel failed: ${result}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error cancelling activation:', error);
+            this.showMessage(`Failed to cancel activation: ${error.message}`, 'error');
+        }
     }
-    
-    if (service.quantity < 5) {
-        return '<span class="status-badge low-stock">น้อย</span>';
+
+    async checkActivationStatus(activationId) {
+        try {
+            console.log('Checking status for activation:', activationId);
+            
+            // Convert string to number for comparison
+            const id = parseInt(activationId);
+            
+            const response = await fetch(`${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getStatus&id=${activationId}&lang=${this.LANG}`);
+            const result = await response.text();
+            
+            console.log('Status response:', result);
+            
+            const idToFind = parseInt(activationId);
+            const activation = this.activations.find(a => a.id === idToFind);
+            if (activation) {
+                if (result.startsWith('STATUS_OK:')) {
+                    const smsCode = result.split(':')[1];
+                    activation.status = 'completed';
+                    activation.smsCode = smsCode;
+                    this.showMessage(`SMS received! Code: ${smsCode}`, 'success');
+                } else if (result === 'STATUS_WAIT_CODE') {
+                    activation.status = 'waiting';
+                    this.showMessage('Still waiting for SMS', 'info');
+                } else if (result === 'STATUS_CANCEL') {
+                    activation.status = 'cancelled';
+                    this.showMessage('Activation was cancelled', 'info');
+                } else {
+                    this.showMessage(`Status: ${result}`, 'info');
+                }
+                this.updateActivationsDisplay();
+            }
+        } catch (error) {
+            console.error('Error checking status:', error);
+            this.showMessage('Failed to check status', 'error');
+        }
     }
-    
-    if (service.quantity < 20) {
-        return '<span class="status-badge limited">จำกัด</span>';
+
+    async requestAnotherSMS(activationId) {
+        try {
+            console.log('Requesting another SMS for activation:', activationId);
+            
+            // Convert string to number for comparison
+            const id = parseInt(activationId);
+            
+            // Check if 2 minutes have passed
+            const activation = this.activations.find(a => a.id === id);
+            if (activation) {
+                const timeSinceOrder = new Date() - activation.startTime;
+                const twoMinutes = 2 * 60 * 1000; // 2 minutes in milliseconds
+                
+                if (timeSinceOrder < twoMinutes) {
+                    const remainingTime = Math.ceil((twoMinutes - timeSinceOrder) / 1000);
+                    this.showMessage(`Cannot request another SMS before 2 minutes. Wait ${remainingTime} seconds more.`, 'error');
+                    return;
+                }
+            }
+            
+            const response = await fetch(`${this.API_BASE_URL}?api_key=${this.API_KEY}&action=setStatus&id=${activationId}&status=3&lang=${this.LANG}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const result = await response.text();
+            
+            console.log('Request SMS response:', result);
+            
+            if (result === 'ACCESS_RETRY_GET') {
+                const idToFind = parseInt(activationId);
+                const activation = this.activations.find(a => a.id === idToFind);
+                if (activation) {
+                    activation.status = 'waiting';
+                    activation.startTime = new Date();
+                    activation.endTime = new Date(Date.now() + 20 * 60 * 1000);
+                    this.updateActivationsDisplay();
+                    this.showMessage('Another SMS requested successfully', 'success');
+                }
+            } else {
+                this.showMessage(`Request failed: ${result}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error requesting another SMS:', error);
+            this.showMessage(`Failed to request another SMS: ${error.message}`, 'error');
+        }
     }
-    
-    return '<span class="status-badge available">พร้อม</span>';
-}
 
-function getPriceRange(price, pricing) {
-    if (price < pricing.priceRange.min * 1.1) return 'very-low';
-    if (price < pricing.priceRange.average) return 'low';
-    if (price < pricing.priceRange.average * 1.5) return 'medium';
-    if (price < pricing.priceRange.max * 0.8) return 'high';
-    return 'very-high';
-}
-
-function getPriceRangeText(range) {
-    const rangeTexts = {
-        'very-low': 'ราคาถูกมาก',
-        'low': 'ราคาถูก',
-        'medium': 'ราคาปานกลาง',
-        'high': 'ราคาแพง',
-        'very-high': 'ราคาแพงมาก'
-    };
-    return rangeTexts[range] || 'ราคาปกติ';
-}
-
-function getDeliverabilityInfo(service, statistics) {
-    const deliverability = statistics.deliverability || 0;
-    if (deliverability > 80) {
-        return '<span class="deliverability high"><i class="fas fa-check-circle"></i> สูง</span>';
-    } else if (deliverability > 60) {
-        return '<span class="deliverability medium"><i class="fas fa-exclamation-triangle"></i> ปานกลาง</span>';
-    } else {
-        return '<span class="deliverability low"><i class="fas fa-times-circle"></i> ต่ำ</span>';
+    showAuthModal() {
+        document.getElementById('authModal').classList.add('active');
     }
-}
 
-function getCategoryStats(category, statistics) {
-    const categoryStats = statistics.categories[category];
-    if (!categoryStats) return 'ไม่มีข้อมูล';
-    
-    return `${categoryStats.available}/${categoryStats.count} บริการ`;
-}
-
-function formatTime(date) {
-    return date.toLocaleTimeString('th-TH', {
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
-
-function showLoadingState() {
-    const serviceList = document.querySelector('.service-list');
-    serviceList.classList.add('loading');
-}
-
-function hideLoadingState() {
-    const serviceList = document.querySelector('.service-list');
-    serviceList.classList.remove('loading');
-}
-
-function updateStatisticsDisplay(statistics) {
-    // Create or update statistics panel
-    let statsPanel = document.querySelector('.statistics-panel');
-    if (!statsPanel) {
-        statsPanel = document.createElement('div');
-        statsPanel.className = 'statistics-panel';
-        document.querySelector('.service-section').appendChild(statsPanel);
+    hideAuthModal() {
+        document.getElementById('authModal').classList.remove('active');
     }
-    
-    statsPanel.innerHTML = `
-        <div class="stats-header">
-            <h4>สถิติการใช้งาน</h4>
-        </div>
-        <div class="stats-content">
-            <div class="stat-item">
-                <span class="stat-label">บริการทั้งหมด:</span>
-                <span class="stat-value">${statistics.totalServices}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">พร้อมใช้งาน:</span>
-                <span class="stat-value available">${statistics.availableServices}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">หมดแล้ว:</span>
-                <span class="stat-value unavailable">${statistics.unavailableServices}</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-label">ราคาเฉลี่ย:</span>
-                <span class="stat-value">${formatPrice(statistics.averagePrice)}</span>
-            </div>
-        </div>
-    `;
-}
 
-function updatePricingDisplay(pricing) {
-    // Create or update pricing panel
-    let pricingPanel = document.querySelector('.pricing-panel');
-    if (!pricingPanel) {
-        pricingPanel = document.createElement('div');
-        pricingPanel.className = 'pricing-panel';
-        document.querySelector('.service-section').appendChild(pricingPanel);
-    }
-    
-    pricingPanel.innerHTML = `
-        <div class="pricing-header">
-            <h4>ข้อมูลราคา</h4>
-        </div>
-        <div class="pricing-content">
-            <div class="price-range">
-                <span class="price-label">ช่วงราคา:</span>
-                <span class="price-value">${formatPrice(pricing.priceRange.min)} - ${formatPrice(pricing.priceRange.max)}</span>
-            </div>
-            <div class="price-average">
-                <span class="price-label">ราคาเฉลี่ย:</span>
-                <span class="price-value">${formatPrice(pricing.priceRange.average)}</span>
-            </div>
-        </div>
-    `;
-}
-
-function updateStatusDisplay(status) {
-    // Create or update status panel
-    let statusPanel = document.querySelector('.status-panel');
-    if (!statusPanel) {
-        statusPanel = document.createElement('div');
-        statusPanel.className = 'status-panel';
-        document.querySelector('.service-section').appendChild(statusPanel);
-    }
-    
-    statusPanel.innerHTML = `
-        <div class="status-header">
-            <h4>สถานะบริการ</h4>
-        </div>
-        <div class="status-content">
-            <div class="status-item">
-                <span class="status-label">พร้อมใช้งาน:</span>
-                <span class="status-value available">${status.statusSummary.available}</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">หมดแล้ว:</span>
-                <span class="status-value unavailable">${status.statusSummary.unavailable}</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">สต็อกน้อย:</span>
-                <span class="status-value low-stock">${status.statusSummary.lowStock}</span>
-            </div>
-        </div>
-    `;
-}
-
-function showServiceDetails(serviceId) {
-    // Show detailed service information
-    console.log('Showing details for service:', serviceId);
-    // TODO: Implement service details modal
-}
-
-function showError(message) {
-    // Create error notification
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'error-notification';
-    errorDiv.innerHTML = `
-        <i class="fas fa-exclamation-circle"></i>
-        <span>${message}</span>
-    `;
-    
-    // Add to page
-    document.body.appendChild(errorDiv);
-    
-    // Remove after 5 seconds
-    setTimeout(() => {
-        errorDiv.remove();
-    }, 5000);
-}
-
-// Initialize page
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('SMS Verification Service initialized');
-    
-    try {
-        // Load initial data from APIs
-        await loadCountries();
+    handleAuth() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
         
-        // Set default country (Thailand)
-        countrySelect.value = '52';
-        await updateOperators(52);
-        await updateServices(52, 'any');
-        
-    } catch (error) {
-        console.error('Error initializing page:', error);
-        showError('เกิดข้อผิดพลาดในการโหลดข้อมูล');
+        // Simplified auth for demo
+        if (email && password) {
+            this.showMessage('Signed in successfully', 'success');
+            this.hideAuthModal();
+            // Update UI to show logged in state
+            document.getElementById('signInBtn').innerHTML = '<i class="fas fa-user"></i> Account';
+        }
     }
+
+    showLoading() {
+        document.getElementById('loadingOverlay').classList.add('active');
+    }
+
+    hideLoading() {
+        document.getElementById('loadingOverlay').classList.remove('active');
+    }
+
+    showMessage(message, type) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message message-${type}`;
+        messageDiv.innerHTML = `
+            <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+            ${message}
+        `;
+        
+        // Add message styles
+        messageDiv.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            animation: slideInRight 0.3s ease;
+            ${type === 'success' ? 'background: #059669;' : 'background: #dc2626;'}
+        `;
+        
+        document.body.appendChild(messageDiv);
+        
+        setTimeout(() => {
+            messageDiv.remove();
+        }, 5000);
+    }
+}
+
+// Initialize the service when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    window.smsService = new SMSVerificationService();
 });
 
-// Utility Functions
-function formatPrice(amount) {
-    return new Intl.NumberFormat('th-TH', {
-        style: 'currency',
-        currency: 'THB'
-    }).format(amount);
-}
-
-function formatTimeRemaining(minutes) {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    
-    if (hours > 0) {
-        return `${hours} ชั่วโมง ${mins} นาที`;
+// Add CSS for message animations
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideInRight {
+        from {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
     }
-    return `${mins} นาที`;
-}
-
-// Service Management Functions
-function addServiceCard(service) {
-    const serviceList = document.querySelector('.service-list');
-    const card = createServiceCard(service);
-    serviceList.appendChild(card);
-}
-
-function createServiceCard(service) {
-    const card = document.createElement('div');
-    card.className = 'service-card';
-    card.dataset.category = service.category;
-    
-    card.innerHTML = `
-        <div class="service-icon">
-            <i class="${service.icon}"></i>
-        </div>
-        <div class="service-info">
-            <h4>${service.name}</h4>
-            <p class="service-desc">${service.description}</p>
-            <div class="service-meta">
-                <span class="price">${formatPrice(service.price)}</span>
-                <span class="stock">${service.stock}</span>
-            </div>
-        </div>
-        <button class="buy-btn">ซื้อ</button>
-    `;
-    
-    // Add event listener to buy button
-    const buyBtn = card.querySelector('.buy-btn');
-    buyBtn.addEventListener('click', () => {
-        handleServicePurchase(service);
-    });
-    
-    return card;
-}
-
-function handleServicePurchase(service) {
-    console.log('Purchasing service:', service);
-    // TODO: Implement actual purchase logic
-}
-
-// Demo data for testing
-const demoServices = [
-    {
-        name: 'Facebook',
-        description: 'รับ SMS สำหรับ Facebook',
-        price: 15,
-        stock: '20/100',
-        category: 'social',
-        icon: 'fab fa-facebook'
-    },
-    {
-        name: 'Instagram',
-        description: 'รับ SMS สำหรับ Instagram',
-        price: 18,
-        stock: '15/50',
-        category: 'social',
-        icon: 'fab fa-instagram'
-    },
-    {
-        name: 'PayPal',
-        description: 'รับ SMS สำหรับ PayPal',
-        price: 25,
-        stock: '8/30',
-        category: 'finance',
-        icon: 'fab fa-paypal'
-    }
-];
-
-// Export functions for potential use in other modules
-window.SMSVerification = {
-    openModal,
-    closeModal,
-    formatPrice,
-    formatTimeRemaining,
-    addServiceCard,
-    createServiceCard
-};
+`;
+document.head.appendChild(style);

@@ -27,11 +27,17 @@ app.get('/api', async (req, res) => {
         
         console.log('📡 API URL:', apiUrl);
         
-        // Make the request to the SMS API
+        // Make the request to the SMS API with retry mechanism
         const response = await axios.get(apiUrl, {
-            timeout: 10000,
+            timeout: 15000, // Increased timeout
             headers: {
-                'User-Agent': 'SMS-Verification-Proxy/1.0'
+                'User-Agent': 'SMS-Verification-Proxy/1.0',
+                'Accept': 'application/json, text/plain, */*',
+                'Cache-Control': 'no-cache'
+            },
+            maxRedirects: 5,
+            validateStatus: function (status) {
+                return status >= 200 && status < 300; // Only resolve for 2xx status codes
             }
         });
         
@@ -61,10 +67,26 @@ app.get('/api', async (req, res) => {
         console.error('❌ Proxy Error:', error.message);
         console.error('❌ Error details:', error.response?.data);
         
-        res.status(500).json({
-            error: 'Proxy Error',
+        // Handle different types of errors
+        let statusCode = 500;
+        let errorMessage = 'Proxy Error';
+        
+        if (error.code === 'ECONNABORTED') {
+            statusCode = 408;
+            errorMessage = 'Request timeout - API server is slow';
+        } else if (error.code === 'ENOTFOUND') {
+            statusCode = 503;
+            errorMessage = 'API server not found';
+        } else if (error.response) {
+            statusCode = error.response.status;
+            errorMessage = `API Error: ${error.response.statusText}`;
+        }
+        
+        res.status(statusCode).json({
+            error: errorMessage,
             message: error.message,
-            details: error.response?.data || 'No additional details'
+            details: error.response?.data || 'No additional details',
+            timestamp: new Date().toISOString()
         });
     }
 });

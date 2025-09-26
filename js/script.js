@@ -17,6 +17,12 @@ class SMSVerificationService {
         this.maxServicesToShow = 999999;
         this.timerInterval = null; // Timer for countdown
         
+        // Stability improvements
+        this.retryAttempts = 3;
+        this.retryDelay = 1000; // 1 second
+        this.requestTimeout = 10000; // 10 seconds
+        this.isLoading = false;
+        
         this.init();
     }
 
@@ -25,6 +31,65 @@ class SMSVerificationService {
         this.bindEvents();
         this.loadInitialData();
         this.startTimer();
+    }
+
+    // Enhanced API call with retry mechanism
+    async makeApiCall(url, options = {}) {
+        const maxRetries = this.retryAttempts;
+        let lastError;
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                console.log(`🔄 API Call attempt ${attempt}/${maxRetries}: ${url}`);
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), this.requestTimeout);
+                
+                const response = await fetch(url, {
+                    ...options,
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.text();
+                
+                // Check for API-specific errors
+                if (data.includes('BAD_KEY')) {
+                    throw new Error('Invalid API key');
+                }
+                if (data.includes('ERROR_API')) {
+                    throw new Error('API processing error');
+                }
+                if (data.includes('REQUEST_LIMIT')) {
+                    throw new Error('Request rate limit exceeded');
+                }
+                
+                console.log(`✅ API Call successful on attempt ${attempt}`);
+                return data;
+                
+            } catch (error) {
+                lastError = error;
+                console.warn(`⚠️ API Call attempt ${attempt} failed:`, error.message);
+                
+                if (attempt < maxRetries) {
+                    const delay = this.retryDelay * attempt; // Exponential backoff
+                    console.log(`⏳ Retrying in ${delay}ms...`);
+                    await this.sleep(delay);
+                }
+            }
+        }
+        
+        throw new Error(`API call failed after ${maxRetries} attempts. Last error: ${lastError.message}`);
+    }
+
+    // Sleep utility for delays
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     bindEvents() {
@@ -88,21 +153,12 @@ class SMSVerificationService {
     async loadCountries() {
         try {
             console.log('🌍 Loading countries...');
+            this.showLoading('Loading countries...');
             
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getCountryAndOperators&lang=${this.LANG}`;
-            const response = await fetch(url);
+            const data = await this.makeApiCall(url);
             
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            const data = await response.text();
             console.log('Countries response:', data);
-            
-            if (data.includes('BAD_KEY')) {
-                throw new Error('Invalid API key');
-            }
-            
             const countries = JSON.parse(data);
             this.countriesData = countries;
             
@@ -110,9 +166,11 @@ class SMSVerificationService {
             this.updateStatistics();
             
             console.log(`✅ Loaded ${countries.length} countries`);
+            this.hideLoading();
             
         } catch (error) {
             console.error('❌ Error loading countries:', error);
+            this.hideLoading();
             throw error;
         }
     }
@@ -173,21 +231,12 @@ class SMSVerificationService {
     async loadServices(countryId, operatorId) {
         try {
             console.log(`🔧 Loading services for country ${countryId}, operator ${operatorId}...`);
+            this.showLoading('Loading services...');
             
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getServicesAndCost&country=${countryId}&operator=${operatorId}&lang=${this.LANG}`;
-            const response = await fetch(url);
+            const data = await this.makeApiCall(url);
             
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            const data = await response.text();
             console.log('Services response:', data);
-            
-            if (data.includes('BAD_KEY')) {
-                throw new Error('Invalid API key');
-            }
-            
             const services = JSON.parse(data);
             this.servicesData = services;
             this.filteredServices = [...services];
@@ -196,6 +245,7 @@ class SMSVerificationService {
             this.updateStatistics();
             
             console.log(`✅ Loaded ${services.length} services`);
+            this.hideLoading();
             
         } catch (error) {
             console.error('❌ Error loading services:', error);
@@ -208,19 +258,9 @@ class SMSVerificationService {
             console.log('💰 Loading balance...');
             
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getBalance&lang=${this.LANG}`;
-            const response = await fetch(url);
+            const balance = await this.makeApiCall(url);
             
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            const balance = await response.text();
             console.log('Balance response:', balance);
-            
-            if (balance.includes('BAD_KEY')) {
-                throw new Error('Invalid API key');
-            }
-            
             this.userBalance = parseFloat(balance);
             console.log(`✅ Balance: $${this.userBalance}`);
             
@@ -402,13 +442,7 @@ class SMSVerificationService {
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getNumber&service=${service.id}&operator=${this.currentOperator}&country=${this.currentCountry}&lang=${this.LANG}`;
             
             console.log('📡 Calling API:', url);
-            const response = await fetch(url);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            const result = await response.text();
+            const result = await this.makeApiCall(url);
             console.log('📄 API Response:', result);
             
             if (result.includes('NO_BALANCE')) {
@@ -476,13 +510,7 @@ class SMSVerificationService {
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getServicesAndCost&country=${this.currentCountry}&operator=${this.currentOperator}&lang=${this.LANG}`;
             
             console.log('📡 Refreshing prices:', url);
-            const response = await fetch(url);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            const data = await response.text();
+            const data = await this.makeApiCall(url);
             console.log('📄 Updated prices response:', data);
             
             if (data.includes('BAD_KEY')) {
@@ -639,13 +667,7 @@ class SMSVerificationService {
     async checkActivationStatus(activationId) {
         try {
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getStatus&id=${activationId}&lang=${this.LANG}`;
-            const response = await fetch(url);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            const result = await response.text();
+            const result = await this.makeApiCall(url);
             console.log('📄 Status response:', result);
             
             if (result === 'STATUS_WAIT_CODE') {
@@ -685,13 +707,7 @@ class SMSVerificationService {
     async cancelActivation(activationId) {
         try {
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=setStatus&id=${activationId}&status=8&lang=${this.LANG}`;
-            const response = await fetch(url);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            const result = await response.text();
+            const result = await this.makeApiCall(url);
             console.log('📄 Cancel response:', result);
             
             if (result === 'ACCESS_CANCEL') {
@@ -714,13 +730,7 @@ class SMSVerificationService {
     async requestAnotherSMS(activationId) {
         try {
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=setStatus&id=${activationId}&status=3&lang=${this.LANG}`;
-            const response = await fetch(url);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            const result = await response.text();
+            const result = await this.makeApiCall(url);
             console.log('📄 Request SMS response:', result);
             
             if (result === 'ACCESS_RETRY_GET') {
@@ -925,13 +935,7 @@ class SMSVerificationService {
                 }
             }
             
-            const response = await fetch(`${this.API_BASE_URL}?api_key=${this.API_KEY}&action=setStatus&id=${activationId}&status=8&lang=${this.LANG}`);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            const result = await response.text();
+            const result = await this.makeApiCall(`${this.API_BASE_URL}?api_key=${this.API_KEY}&action=setStatus&id=${activationId}&status=8&lang=${this.LANG}`);
             
             console.log('Cancel response:', result);
             
@@ -965,8 +969,7 @@ class SMSVerificationService {
             // Convert string to number for comparison
             const id = parseInt(activationId);
             
-            const response = await fetch(`${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getStatus&id=${activationId}&lang=${this.LANG}`);
-            const result = await response.text();
+            const result = await this.makeApiCall(`${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getStatus&id=${activationId}&lang=${this.LANG}`);
             
             console.log('Status response:', result);
             
@@ -1015,13 +1018,7 @@ class SMSVerificationService {
                 }
             }
             
-            const response = await fetch(`${this.API_BASE_URL}?api_key=${this.API_KEY}&action=setStatus&id=${activationId}&status=3&lang=${this.LANG}`);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            const result = await response.text();
+            const result = await this.makeApiCall(`${this.API_BASE_URL}?api_key=${this.API_KEY}&action=setStatus&id=${activationId}&status=3&lang=${this.LANG}`);
             
             console.log('Request SMS response:', result);
             
@@ -1153,12 +1150,26 @@ class SMSVerificationService {
         console.log('✅ Fallback data loaded');
     }
 
-    showLoading() {
-        document.getElementById('loadingOverlay').classList.add('active');
+    showLoading(message = 'Loading...') {
+        this.isLoading = true;
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+            overlay.classList.add('active');
+            const spinner = overlay.querySelector('.loading-spinner p');
+            if (spinner) {
+                spinner.textContent = message;
+            }
+        }
+        console.log(`⏳ ${message}`);
     }
 
     hideLoading() {
-        document.getElementById('loadingOverlay').classList.remove('active');
+        this.isLoading = false;
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+            overlay.classList.remove('active');
+        }
+        console.log('✅ Loading completed');
     }
 
     showMessage(message, type) {

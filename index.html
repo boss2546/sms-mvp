@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMS Verification Service</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <h1>SMS Verification</h1>
+            </div>
+            <nav class="nav">
+                <button class="auth-btn" id="authBtn">เข้าสู่ระบบ</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <!-- Catalog Section -->
+        <section class="catalog-section">
+            <div class="container">
+                <div class="catalog-header">
+                    <h2>เลือกบริการ SMS Verification</h2>
+                    <p>เลือกประเทศ ผู้ให้บริการ และบริการที่ต้องการ</p>
+                </div>
+
+                <div class="catalog-content">
+                    <!-- Country & Operator Picker -->
+                    <div class="picker-section">
+                        <div class="country-picker">
+                            <label for="countrySelect">ประเทศ</label>
+                            <select id="countrySelect" class="picker-select">
+                                <option value="52" selected>ไทย (Thailand)</option>
+                                <option value="0">รัสเซีย (Russia)</option>
+                                <option value="1">ยูเครน (Ukraine)</option>
+                                <option value="6">อินโดนีเซีย (Indonesia)</option>
+                                <option value="10">เวียดนาม (Vietnam)</option>
+                            </select>
+                        </div>
+
+                        <div class="operator-picker">
+                            <label for="operatorSelect">ผู้ให้บริการ</label>
+                            <select id="operatorSelect" class="picker-select">
+                                <option value="any" selected>สุ่ม (Any)</option>
+                                <option value="ais">AIS</option>
+                                <option value="dtac">DTAC</option>
+                                <option value="truemove">TrueMove</option>
+                                <option value="cat_mobile">CAT Mobile</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Service List -->
+                    <div class="service-section">
+                        <div class="service-header">
+                            <h3>บริการที่แนะนำ</h3>
+                            <div class="service-filters">
+                                <button class="filter-btn active" data-category="all">ทั้งหมด</button>
+                                <button class="filter-btn" data-category="social">Social</button>
+                                <button class="filter-btn" data-category="finance">Finance</button>
+                                <button class="filter-btn" data-category="gaming">Gaming</button>
+                            </div>
+                        </div>
+
+                        <div class="service-list">
+                            <!-- Service Card 1 -->
+                            <div class="service-card recommended" data-category="social">
+                                <div class="service-icon">
+                                    <i class="fab fa-facebook"></i>
+                                </div>
+                                <div class="service-info">
+                                    <h4>Facebook</h4>
+                                    <p class="service-desc">รับ SMS สำหรับ Facebook</p>
+                                    <div class="service-meta">
+                                        <span class="price">฿15.00</span>
+                                        <span class="stock">20/100</span>
+                                    </div>
+                                </div>
+                                <button class="buy-btn">ซื้อ</button>
+                            </div>
+
+                            <!-- Service Card 2 -->
+                            <div class="service-card recommended" data-category="social">
+                                <div class="service-icon">
+                                    <i class="fab fa-instagram"></i>
+                                </div>
+                                <div class="service-info">
+                                    <h4>Instagram</h4>
+                                    <p class="service-desc">รับ SMS สำหรับ Instagram</p>
+                                    <div class="service-meta">
+                                        <span class="price">฿18.00</span>
+                                        <span class="stock">15/50</span>
+                                    </div>
+                                </div>
+                                <button class="buy-btn">ซื้อ</button>
+                            </div>
+
+                            <!-- Service Card 3 -->
+                            <div class="service-card" data-category="finance">
+                                <div class="service-icon">
+                                    <i class="fab fa-paypal"></i>
+                                </div>
+                                <div class="service-info">
+                                    <h4>PayPal</h4>
+                                    <p class="service-desc">รับ SMS สำหรับ PayPal</p>
+                                    <div class="service-meta">
+                                        <span class="price">฿25.00</span>
+                                        <span class="stock">8/30</span>
+                                    </div>
+                                </div>
+                                <button class="buy-btn">ซื้อ</button>
+                            </div>
+
+                            <!-- Service Card 4 -->
+                            <div class="service-card" data-category="gaming">
+                                <div class="service-icon">
+                                    <i class="fab fa-steam"></i>
+                                </div>
+                                <div class="service-info">
+                                    <h4>Steam</h4>
+                                    <p class="service-desc">รับ SMS สำหรับ Steam</p>
+                                    <div class="service-meta">
+                                        <span class="price">฿12.00</span>
+                                        <span class="stock">45/80</span>
+                                    </div>
+                                </div>
+                                <button class="buy-btn">ซื้อ</button>
+                            </div>
+
+                            <!-- Service Card 5 -->
+                            <div class="service-card" data-category="social">
+                                <div class="service-icon">
+                                    <i class="fab fa-whatsapp"></i>
+                                </div>
+                                <div class="service-info">
+                                    <h4>WhatsApp</h4>
+                                    <p class="service-desc">รับ SMS สำหรับ WhatsApp</p>
+                                    <div class="service-meta">
+                                        <span class="price">฿20.00</span>
+                                        <span class="stock">12/40</span>
+                                    </div>
+                                </div>
+                                <button class="buy-btn">ซื้อ</button>
+                            </div>
+
+                            <!-- Service Card 6 -->
+                            <div class="service-card" data-category="finance">
+                                <div class="service-icon">
+                                    <i class="fab fa-bitcoin"></i>
+                                </div>
+                                <div class="service-info">
+                                    <h4>Binance</h4>
+                                    <p class="service-desc">รับ SMS สำหรับ Binance</p>
+                                    <div class="service-meta">
+                                        <span class="price">฿30.00</span>
+                                        <span class="stock">5/20</span>
+                                    </div>
+                                </div>
+                                <button class="buy-btn">ซื้อ</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Activation Section -->
+        <section class="activation-section">
+            <div class="container">
+                <div class="activation-header">
+                    <h2>การเปิดใช้งาน</h2>
+                    <p>สถานะการเปิดใช้งานบริการของคุณ</p>
+                </div>
+
+                <div class="activation-list">
+                    <!-- Empty state -->
+                    <div class="empty-state">
+                        <i class="fas fa-inbox"></i>
+                        <h3>ยังไม่มีบริการที่เปิดใช้งาน</h3>
+                        <p>เลือกบริการจากด้านบนเพื่อเริ่มต้น</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Auth Modal -->
+    <div class="modal" id="authModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>เข้าสู่ระบบ</h3>
+                <button class="close-btn" id="closeAuthModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="auth-tabs">
+                    <button class="tab-btn active" data-tab="login">เข้าสู่ระบบ</button>
+                    <button class="tab-btn" data-tab="register">สมัครสมาชิก</button>
+                </div>
+
+                <!-- Login Form -->
+                <form class="auth-form" id="loginForm">
+                    <div class="form-group">
+                        <label for="loginEmail">อีเมล</label>
+                        <input type="email" id="loginEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">รหัสผ่าน</label>
+                        <input type="password" id="loginPassword" required>
+                    </div>
+                    <button type="submit" class="submit-btn">เข้าสู่ระบบ</button>
+                </form>
+
+                <!-- Register Form -->
+                <form class="auth-form hidden" id="registerForm">
+                    <div class="form-group">
+                        <label for="registerEmail">อีเมล</label>
+                        <input type="email" id="registerEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPassword">รหัสผ่าน</label>
+                        <input type="password" id="registerPassword" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword">ยืนยันรหัสผ่าน</label>
+                        <input type="password" id="confirmPassword" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="agreeTerms" required>
+                            ฉันยอมรับ <a href="#">ข้อกำหนดและเงื่อนไข</a> และ <a href="#">นโยบายความเป็นส่วนตัว</a>
+                        </label>
+                    </div>
+                    <button type="submit" class="submit-btn">สมัครสมาชิก</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top-up Modal -->
+    <div class="modal" id="topupModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>เติมเงิน</h3>
+                <button class="close-btn" id="closeTopupModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="topup-form">
+                    <div class="form-group">
+                        <label for="topupAmount">จำนวนเงิน</label>
+                        <select id="topupAmount" class="picker-select">
+                            <option value="100">฿100</option>
+                            <option value="200">฿200</option>
+                            <option value="500">฿500</option>
+                            <option value="1000">฿1,000</option>
+                            <option value="custom">กำหนดเอง</option>
+                        </select>
+                    </div>
+                    <div class="bank-info">
+                        <h4>ข้อมูลบัญชีธนาคาร</h4>
+                        <p>ธนาคาร: กสิกรไทย</p>
+                        <p>เลขบัญชี: 123-4-56789-0</p>
+                        <p>ชื่อบัญชี: SMS Verification Service</p>
+                    </div>
+                    <div class="form-group">
+                        <label for="slipUpload">อัปโหลดสลิปโอนเงิน</label>
+                        <input type="file" id="slipUpload" accept="image/*">
+                    </div>
+                    <button class="submit-btn">ยืนยันการเติมเงิน</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-links">
+                    <a href="#">ข้อกำหนดและเงื่อนไข</a>
+                    <a href="#">นโยบายความเป็นส่วนตัว</a>
+                    <a href="#">FAQ</a>
+                    <a href="#">ติดต่อเรา</a>
+                </div>
+                <div class="footer-social">
+                    <a href="#"><i class="fab fa-facebook"></i></a>
+                    <a href="#"><i class="fab fa-twitter"></i></a>
+                    <a href="#"><i class="fab fa-line"></i></a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

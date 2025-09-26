@@ -7,6 +7,8 @@ The API is needed to automate the process of ordering temporary numbers and rece
 
 **Base URL:** `https://sms-verification-number.com/stubs/handler_api`
 
+**API Key:** `7ccb326980edc2bfec78dcd66326aad7`
+
 ## Important Notes
 - The "lang" parameter is mandatory and determines the language and currency for displaying data
 - Available values: "ru" (rubles) and "en" (dollars)
@@ -25,7 +27,7 @@ The API is needed to automate the process of ordering temporary numbers and rece
 ### 1. getBalance
 Check Balance
 
-**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=APIKEY&action=getBalance&lang=LANG`
+**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=7ccb326980edc2bfec78dcd66326aad7&action=getBalance&lang=LANG`
 
 **Parameters:**
 | Field | Type | Description |
@@ -42,7 +44,7 @@ Check Balance
 ### 2. getCountryAndOperators
 Get all available countries and mobile operators for countries.
 
-**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=APIKEY&action=getCountryAndOperators&lang=LANG`
+**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=7ccb326980edc2bfec78dcd66326aad7&action=getCountryAndOperators&lang=LANG`
 
 **Parameters:**
 | Field | Type | Description |
@@ -83,7 +85,7 @@ Get all available countries and mobile operators for countries.
 ### 3. getPrices
 Get current prices by country
 
-**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=APIKEY&action=getPrices&country=COUNTRY&lang=LANG`
+**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=7ccb326980edc2bfec78dcd66326aad7&action=getPrices&country=COUNTRY&lang=LANG`
 
 **Parameters:**
 | Field | Type | Description |
@@ -102,7 +104,7 @@ Get current prices by country
 ### 4. getServicesAndCost
 Get current prices and the number of available numbers
 
-**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=APIKEY&action=getServicesAndCost&country=COUNTRY&operator=OPERATOR&service=SERVICE&lang=LANG`
+**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=7ccb326980edc2bfec78dcd66326aad7&action=getServicesAndCost&country=COUNTRY&operator=OPERATOR&service=SERVICE&lang=LANG`
 
 **Parameters:**
 | Field | Type | Description |
@@ -140,7 +142,7 @@ Get current prices and the number of available numbers
 ### 5. getServicesAndCostWithStatistics
 Get current prices, the number of online numbers with SMS delivery statistics by services/sites, and a list of minimum prices by country.
 
-**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=APIKEY&action=getServicesAndCostWithStatistics&country=COUNTRY&operator=OPERATOR&service=SERVICE&lang=LANG`
+**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=7ccb326980edc2bfec78dcd66326aad7&action=getServicesAndCostWithStatistics&country=COUNTRY&operator=OPERATOR&service=SERVICE&lang=LANG`
 
 **Parameters:**
 | Field | Type | Description |
@@ -179,7 +181,7 @@ Get current prices, the number of online numbers with SMS delivery statistics by
 ### 6. getNumber
 Order a number
 
-**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=APIKEY&action=getNumber&service=SERVICE&operator=OPERATOR&country=COUNTRY&lang=LANG`
+**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=7ccb326980edc2bfec78dcd66326aad7&action=getNumber&service=SERVICE&operator=OPERATOR&country=COUNTRY&lang=LANG`
 
 **Parameters:**
 | Field | Type | Description |
@@ -203,7 +205,7 @@ Order a number
 ### 7. getNumberV2
 Order a number (Enhanced version)
 
-**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=APIKEY&action=getNumberV2&service=SERVICE&operator=OPERATOR&country=COUNTRY&lang=LANG`
+**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=7ccb326980edc2bfec78dcd66326aad7&action=getNumberV2&service=SERVICE&operator=OPERATOR&country=COUNTRY&lang=LANG`
 
 **Parameters:** Same as getNumber
 
@@ -224,7 +226,7 @@ Order a number (Enhanced version)
 ### 8. setStatus
 Change status
 
-**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=APIKEY&action=setStatus&id=ID&status=STATUS&lang=LANG`
+**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=7ccb326980edc2bfec78dcd66326aad7&action=setStatus&id=ID&status=STATUS&lang=LANG`
 
 **Parameters:**
 | Field | Type | Description |
@@ -252,7 +254,7 @@ Change status
 ### 9. getStatus
 Check the current status of the ordered number
 
-**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=APIKEY&action=getStatus&id=ID&lang=LANG`
+**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=7ccb326980edc2bfec78dcd66326aad7&action=getStatus&id=ID&lang=LANG`
 
 **Parameters:**
 | Field | Type | Description |
@@ -272,7 +274,7 @@ Check the current status of the ordered number
 ### 10. getCurrentActivationsList
 List of current orders
 
-**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=APIKEY&action=getCurrentActivationsList&status=STATUS&limit=LIMIT&order=ORDER&orderBy=ORDERBY&lang=LANG`
+**URL:** `https://sms-verification-number.com/stubs/handler_api?api_key=7ccb326980edc2bfec78dcd66326aad7&action=getCurrentActivationsList&status=STATUS&limit=LIMIT&order=ORDER&orderBy=ORDERBY&lang=LANG`
 
 **Parameters:**
 | Field | Type | Description |

@@ -1,7 +1,7 @@
 // SMS Verification Service - Main Script
 class SMSVerificationService {
     constructor() {
-        this.API_BASE_URL = 'https://sms-verification-number.com/stubs/handler_api';
+        this.API_BASE_URL = '/api'; // Use our proxy server
         this.API_KEY = '7ccb326980edc2bfec78dcd66326aad7';
         this.LANG = 'en';
         
@@ -1138,11 +1138,17 @@ class SMSVerificationService {
         // Update UI
         this.updateCountrySelect(this.countriesData);
         this.updateOperatorSelect(this.operatorsData);
-        this.renderServices(this.servicesData);
+        
+        // Set filtered services and update display
+        this.filteredServices = this.servicesData;
+        this.updateServicesDisplay();
         this.updateStatistics();
         
         // Set balance
-        document.getElementById('balance').textContent = '$1.71';
+        const balanceDisplay = document.querySelector('.balance-display');
+        if (balanceDisplay) {
+            balanceDisplay.textContent = 'Balance: $1.71';
+        }
         
         console.log('✅ Fallback data loaded');
     }

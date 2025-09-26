@@ -57,21 +57,31 @@ class SMSVerificationService {
             this.showLoading();
             console.log('📡 Loading initial data...');
             
-            await Promise.all([
-                this.loadCountries(),
-                this.loadBalance()
-            ]);
-            
-            // Set default country to Thailand (ID: 7)
-            this.setDefaultCountry();
-            
-            this.hideLoading();
-            this.showMessage('✅ Data loaded successfully', 'success');
+            // Try to load from API first
+            try {
+                await Promise.all([
+                    this.loadCountries(),
+                    this.loadBalance()
+                ]);
+                
+                // Set default country to Thailand (ID: 7)
+                this.setDefaultCountry();
+                
+                this.hideLoading();
+                this.showMessage('✅ ข้อมูลโหลดจาก API สำเร็จ', 'success');
+                
+            } catch (apiError) {
+                console.warn('API failed, using fallback data:', apiError);
+                this.loadFallbackData();
+                this.hideLoading();
+                this.showMessage('⚠️ ใช้ข้อมูลจำลองเนื่องจากไม่สามารถเชื่อมต่อ API ได้', 'info');
+            }
             
         } catch (error) {
             console.error('❌ Error loading initial data:', error);
+            this.loadFallbackData();
             this.hideLoading();
-            this.showMessage('❌ Failed to load data', 'error');
+            this.showMessage('❌ ใช้ข้อมูลจำลอง', 'error');
         }
     }
 
@@ -1035,6 +1045,107 @@ class SMSVerificationService {
     }
 
     // Auth modal functions removed - no more login system
+
+    // Load Fallback Data
+    loadFallbackData() {
+        console.log('📋 Loading fallback data...');
+        
+        // Fallback countries with operators
+        this.countriesData = [
+            { 
+                id: 52, 
+                name: 'Thailand', 
+                operators: {
+                    'any': 'Any',
+                    'ais': 'AIS',
+                    'dtac': 'DTAC',
+                    'truemove': 'TrueMove',
+                    'cat_mobile': 'CAT Mobile',
+                    'my': 'My'
+                }
+            },
+            { 
+                id: 0, 
+                name: 'Russia', 
+                operators: {
+                    'any': 'Any',
+                    'tele2': 'Tele2',
+                    'tinkoff': 'Tinkoff',
+                    'ttk': 'TTK',
+                    'yota': 'Yota'
+                }
+            },
+            { 
+                id: 1, 
+                name: 'Ukraine', 
+                operators: {
+                    'any': 'Any',
+                    'kyivstar': 'Kyivstar',
+                    'life': 'Life',
+                    'lycamobile': 'Lycamobile',
+                    'mts': 'MTS',
+                    'utel': 'Utel',
+                    'vodafone': 'Vodafone'
+                }
+            },
+            { 
+                id: 6, 
+                name: 'Indonesia', 
+                operators: {
+                    'any': 'Any',
+                    'telkomsel': 'Telkomsel',
+                    'indosat': 'Indosat',
+                    'xl': 'XL',
+                    'tri': 'Tri'
+                }
+            },
+            { 
+                id: 10, 
+                name: 'Vietnam', 
+                operators: {
+                    'any': 'Any',
+                    'viettel': 'Viettel',
+                    'mobifone': 'Mobifone',
+                    'vinaphone': 'Vinaphone'
+                }
+            }
+        ];
+        
+        // Fallback operators for first country
+        this.operatorsData = Object.keys(this.countriesData[0].operators).map(key => ({
+            id: key,
+            name: this.countriesData[0].operators[key]
+        }));
+        
+        // Fallback services
+        this.servicesData = [
+            { id: 'fb', name: 'Facebook', price: 0.22, quantity: 1299 },
+            { id: 'go', name: 'Google', price: 0.33, quantity: 7446 },
+            { id: 'wa', name: 'WhatsApp', price: 1.07, quantity: 10169 },
+            { id: 'ig', name: 'Instagram', price: 0.17, quantity: 32144 },
+            { id: 'tg', name: 'Telegram', price: 1.07, quantity: 10169 },
+            { id: 'lf', name: 'TikTok', price: 0.05, quantity: 13786 },
+            { id: 'me', name: 'Line', price: 0.86, quantity: 17912 },
+            { id: 'ka', name: 'Shopee', price: 0.33, quantity: 21115 },
+            { id: 'dl', name: 'Lazada', price: 0.03, quantity: 21078 },
+            { id: 'jg', name: 'Grab', price: 0.03, quantity: 21747 }
+        ];
+        
+        // Set current values
+        this.currentCountry = this.countriesData[0].id;
+        this.currentOperator = 'any';
+        
+        // Update UI
+        this.updateCountrySelect();
+        this.updateOperatorSelect();
+        this.updateServicesGrid();
+        this.updateStatistics();
+        
+        // Set balance
+        document.getElementById('balance').textContent = '$1.71';
+        
+        console.log('✅ Fallback data loaded');
+    }
 
     showLoading() {
         document.getElementById('loadingOverlay').classList.add('active');

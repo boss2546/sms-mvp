@@ -427,7 +427,8 @@ class SMSVerificationService {
             }
             
             if (result.includes('NO_NUMBERS')) {
-                this.showMessage('No numbers available for this service', 'error');
+                // Show loading modal and refresh prices
+                await this.handleNoNumbersAvailable(service);
                 return;
             }
             
@@ -472,6 +473,177 @@ class SMSVerificationService {
             console.error('❌ Error buying service:', error);
             this.showMessage(`Error: ${error.message}`, 'error');
         }
+    }
+
+    async handleNoNumbersAvailable(service) {
+        console.log('🔄 No numbers available, refreshing prices...');
+        
+        // Show loading modal
+        this.showPriceRefreshModal();
+        
+        try {
+            // Get updated prices for this specific service
+            const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getServicesAndCost&country=${this.currentCountry}&operator=${this.currentOperator}&lang=${this.LANG}`;
+            
+            console.log('📡 Refreshing prices:', url);
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.text();
+            console.log('📄 Updated prices response:', data);
+            
+            if (data.includes('BAD_KEY')) {
+                throw new Error('Invalid API key');
+            }
+            
+            const services = JSON.parse(data);
+            const updatedService = services.find(s => s.id === service.id);
+            
+            if (!updatedService) {
+                this.hidePriceRefreshModal();
+                this.showMessage('Service not found in updated prices', 'error');
+                return;
+            }
+            
+            // Hide loading modal
+            this.hidePriceRefreshModal();
+            
+            // Show confirmation dialog
+            const confirmed = await this.showPriceUpdateDialog(service, updatedService);
+            
+            if (confirmed) {
+                // Try to buy with updated service data
+                await this.handleBuyService(updatedService);
+            }
+            
+        } catch (error) {
+            console.error('❌ Error refreshing prices:', error);
+            this.hidePriceRefreshModal();
+            this.showMessage(`Failed to refresh prices: ${error.message}`, 'error');
+        }
+    }
+
+    showPriceRefreshModal() {
+        const modal = document.createElement('div');
+        modal.id = 'priceRefreshModal';
+        modal.className = 'modal active';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Refreshing Prices</h3>
+                </div>
+                <div class="modal-body">
+                    <div class="loading-spinner">
+                        <i class="fas fa-spinner fa-spin"></i>
+                    </div>
+                    <p>Getting latest prices for ${this.currentCountry ? this.countriesData.find(c => c.id === this.currentCountry)?.name : 'selected country'}...</p>
+                </div>
+            </div>
+        `;
+        
+        // Add modal styles
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        `;
+        
+        document.body.appendChild(modal);
+    }
+
+    hidePriceRefreshModal() {
+        const modal = document.getElementById('priceRefreshModal');
+        if (modal) {
+            modal.remove();
+        }
+    }
+
+    async showPriceUpdateDialog(oldService, newService) {
+        return new Promise((resolve) => {
+            const modal = document.createElement('div');
+            modal.id = 'priceUpdateModal';
+            modal.className = 'modal active';
+            
+            const oldPrice = parseFloat(oldService.price);
+            const newPrice = parseFloat(newService.price);
+            const oldQuantity = parseInt(oldService.quantity);
+            const newQuantity = parseInt(newService.quantity);
+            
+            const priceChanged = oldPrice !== newPrice;
+            const quantityChanged = oldQuantity !== newQuantity;
+            
+            let changeText = '';
+            if (priceChanged && quantityChanged) {
+                changeText = `Price: $${oldPrice.toFixed(2)} → $${newPrice.toFixed(2)}<br>Available: ${oldQuantity} → ${newQuantity}`;
+            } else if (priceChanged) {
+                changeText = `Price: $${oldPrice.toFixed(2)} → $${newPrice.toFixed(2)}`;
+            } else if (quantityChanged) {
+                changeText = `Available: ${oldQuantity} → ${newQuantity}`;
+            } else {
+                changeText = 'No changes detected';
+            }
+            
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Price Updated</h3>
+                    </div>
+                    <div class="modal-body">
+                        <div class="service-info">
+                            <h4>${newService.name}</h4>
+                            <div class="price-info">
+                                <div class="current-price">$${newPrice.toFixed(2)}</div>
+                                <div class="quantity-info">${newQuantity} numbers available</div>
+                            </div>
+                            ${changeText !== 'No changes detected' ? `
+                                <div class="changes">
+                                    <strong>Changes:</strong><br>
+                                    ${changeText}
+                                </div>
+                            ` : ''}
+                        </div>
+                        <p>Would you like to purchase this service at the updated price?</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline" onclick="this.closest('.modal').remove(); window.smsService.resolvePriceUpdate(false);">
+                            Cancel
+                        </button>
+                        <button class="btn btn-primary" onclick="this.closest('.modal').remove(); window.smsService.resolvePriceUpdate(true);">
+                            Buy Now
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            // Add modal styles
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+            `;
+            
+            // Store resolve function
+            window.smsService.resolvePriceUpdate = resolve;
+            
+            document.body.appendChild(modal);
+        });
     }
 
     async checkActivationStatus(activationId) {

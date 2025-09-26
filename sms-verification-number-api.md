@@ -14,6 +14,12 @@ The API is needed to automate the process of ordering temporary numbers and rece
 - The method name is the "action" parameter
 - Request rate limit per second (RPS): 150
 
+## Useful Options for API Optimization
+- **Cost Optimization**: Use `getServicesAndCostWithStatistics` method to find minimum prices for numbers in different countries
+- **SMS Delivery Statistics**: View percentage of successful SMS delivery by other users
+- **Price Limiting**: Set maximum price for purchasing to avoid sudden price increases due to high demand
+- **API Key**: Get your API key in the Profile section
+
 ## API Methods
 
 ### 1. getBalance
@@ -311,16 +317,21 @@ List of current orders
 1. **Cost Optimization:** Use the "getServicesAndCostWithStatistics" method to find minimum prices for numbers in different countries
 2. **SMS Delivery Statistics:** View the percentage of successful SMS delivery by other users
 3. **Price Limiting:** Set a maximum price for purchasing to avoid sudden price increases due to high demand
-4. **API Key:** Get your API key in the Profile section
+
+## Payment Methods Supported
+
+The service supports various payment methods:
+- **Credit Cards:** Visa, Mastercard
+- **Digital Wallets:** PayPal, Alipay
+- **Cryptocurrency:** Bitcoin, Ethereum, USDT
+- **Other:** UPI, AdvCash, Payeer
 
 ## Contact Information
 
 - **Support Email:** support@sms-verification-number.com
-- **Company:** THREETWOTWO LTD 14603753
-- **Address:** 85 Great Portland Street, First Floor, London, England, W1W 7LT
-- **Date:** 19 January 2023 UK
-
-## Payment Methods
+- **Company:** THREETWOTWO LTD (Company Number: 14603753)
+- **Registration Date:** 19 January 2023
+- **Location:** 85 Great Portland Street, First Floor, London, England, W1W 7LT
 
 - Visa
 - Mastercard

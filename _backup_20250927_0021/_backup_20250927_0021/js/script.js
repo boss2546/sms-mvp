@@ -16,7 +16,6 @@ class SMSVerificationService {
         this.servicesToShow = 999999; // Show all services
         this.maxServicesToShow = 999999;
         this.timerInterval = null; // Timer for countdown
-        this.statusCheckInterval = null; // Timer for automatic status checking
         
         // Stability improvements
         this.retryAttempts = 3;
@@ -591,9 +590,6 @@ class SMSVerificationService {
                 this.activations.push(activation);
                 this.updateActivationsDisplay();
                 
-                // Show waiting SMS modal
-                this.showWaitingSMSModal(activation);
-                
                 // Scroll to activation section
                 this.scrollToActivationSection();
                 
@@ -859,121 +855,17 @@ class SMSVerificationService {
     }
 
     startTimer() {
-        // Clear existing timers
+        // Clear existing timer
         if (this.timerInterval) {
             clearInterval(this.timerInterval);
-        }
-        if (this.statusCheckInterval) {
-            clearInterval(this.statusCheckInterval);
         }
         
         // Start new timer that updates every second
         this.timerInterval = setInterval(() => {
             this.updateTimers();
         }, 1000);
-        
-        // Start automatic status checking for waiting activations
-        this.statusCheckInterval = setInterval(() => {
-            this.checkAllWaitingActivations();
-        }, 5000); // Check every 5 seconds
     }
     
-    // Check all waiting activations automatically
-    async checkAllWaitingActivations() {
-        const waitingActivations = this.activations.filter(a => a.status === 'waiting');
-        
-        for (const activation of waitingActivations) {
-            try {
-                await this.checkActivationStatus(activation.id, true); // true = silent check
-            } catch (error) {
-                console.warn(`⚠️ ไม่สามารถตรวจสอบสถานะ activation ${activation.id}:`, error.message);
-            }
-        }
-    }
-
-    // Show modal while waiting for SMS
-    showWaitingSMSModal(activation) {
-        const modal = document.createElement('div');
-        modal.className = 'modal active';
-        modal.id = `waiting-modal-${activation.id}`;
-        
-        modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>รอรับ SMS</h3>
-                </div>
-                <div class="modal-body">
-                    <div class="waiting-sms-info">
-                        <div class="service-info">
-                            <h4>${this.translateServiceName(activation.service.name)}</h4>
-                            <p>หมายเลข: <strong>${activation.phoneNumber}</strong></p>
-                        </div>
-                        <div class="waiting-animation">
-                            <i class="fas fa-sms fa-pulse"></i>
-                            <p>กำลังรอรับ SMS...</p>
-                        </div>
-                        <div class="waiting-timer">
-                            <p>เวลาที่เหลือ: <span id="waiting-timer-${activation.id}">20:00</span></p>
-                        </div>
-                        <div class="waiting-note">
-                            <p><i class="fas fa-info-circle"></i> ระบบจะตรวจสอบสถานะอัตโนมัติทุก 5 วินาที</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-outline" onclick="this.closest('.modal').remove();">
-                        ปิด
-                    </button>
-                    <button class="btn btn-primary" onclick="window.smsService.checkActivationStatus(${activation.id}); this.closest('.modal').remove();">
-                        ตรวจสอบสถานะ
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-        
-        // Start countdown timer for this modal
-        this.startWaitingModalTimer(activation.id);
-    }
-
-    // Start countdown timer for waiting modal
-    startWaitingModalTimer(activationId) {
-        const timerElement = document.getElementById(`waiting-timer-${activationId}`);
-        if (!timerElement) return;
-        
-        const updateTimer = () => {
-            const activation = this.activations.find(a => a.id === activationId);
-            if (!activation || activation.status !== 'waiting') {
-                // Remove modal if activation is no longer waiting
-                const modal = document.getElementById(`waiting-modal-${activationId}`);
-                if (modal) {
-                    modal.remove();
-                }
-                return;
-            }
-            
-            const timeLeft = Math.max(0, Math.floor((activation.endTime - new Date()) / 1000));
-            const minutes = Math.floor(timeLeft / 60);
-            const seconds = timeLeft % 60;
-            
-            timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-            
-            if (timeLeft > 0) {
-                setTimeout(updateTimer, 1000);
-            } else {
-                // Time expired
-                timerElement.textContent = 'หมดเวลา';
-                const modal = document.getElementById(`waiting-modal-${activationId}`);
-                if (modal) {
-                    modal.remove();
-                }
-            }
-        };
-        
-        updateTimer();
-    }
-
     updateTimers() {
         const now = new Date();
         let hasActiveActivations = false;
@@ -1179,20 +1071,16 @@ class SMSVerificationService {
         }
     }
 
-    async checkActivationStatus(activationId, silent = false) {
+    async checkActivationStatus(activationId) {
         try {
-            if (!silent) {
-                console.log('กำลังตรวจสอบสถานะการใช้งาน:', activationId);
-            }
+            console.log('กำลังตรวจสอบสถานะการใช้งาน:', activationId);
             
             // Convert string to number for comparison
             const id = parseInt(activationId);
             
             const result = await this.makeApiCall(`${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getStatus&id=${activationId}&lang=${this.LANG}`);
             
-            if (!silent) {
-                console.log('การตอบสนองสถานะ:', result);
-            }
+            console.log('การตอบสนองสถานะ:', result);
             
             const idToFind = parseInt(activationId);
             const activation = this.activations.find(a => a.id === idToFind);
@@ -1204,16 +1092,12 @@ class SMSVerificationService {
                     this.showMessage(`ได้รับ SMS แล้ว! รหัส: ${smsCode}`, 'success');
                 } else if (result === 'STATUS_WAIT_CODE') {
                     activation.status = 'waiting';
-                    if (!silent) {
-                        this.showMessage('ยังรอรับ SMS อยู่', 'info');
-                    }
+                    this.showMessage('ยังรอรับ SMS อยู่', 'info');
                 } else if (result === 'STATUS_CANCEL') {
                     activation.status = 'cancelled';
                     this.showMessage('การใช้งานถูกยกเลิก', 'info');
                 } else {
-                    if (!silent) {
-                        this.showMessage(`สถานะ: ${result}`, 'info');
-                    }
+                    this.showMessage(`สถานะ: ${result}`, 'info');
                 }
                 this.updateActivationsDisplay();
             }

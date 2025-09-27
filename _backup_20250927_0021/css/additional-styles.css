@@ -1,0 +1,29 @@
+/* Cooldown Warning */
+.cooldown-warning {
+    background: rgba(255, 193, 7, 0.1);
+    color: #856404;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    margin: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.cooldown-warning i {
+    color: #ffc107;
+}
+
+/* Disabled Button Styling */
+.btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.btn.disabled:hover {
+    transform: none;
+    box-shadow: none;
+}

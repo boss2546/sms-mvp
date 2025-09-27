@@ -18,6 +18,10 @@ class SMSVerificationService {
         this.timerInterval = null; // Timer for countdown
         this.statusCheckInterval = null; // Timer for automatic status checking
         
+        // Top-up and wallet functionality
+        this.currentTopupId = null;
+        this.topupPollingInterval = null;
+        
         // Stability improvements
         this.retryAttempts = 3;
         this.retryDelay = 1000; // 1 second
@@ -225,6 +229,141 @@ class SMSVerificationService {
         // Close modals when clicking outside - removed (no more login modal)
 
         // Form submissions - removed (no more login form)
+
+        // Top-up modal events
+        document.getElementById('topupBtn').addEventListener('click', () => {
+            this.openTopupModal();
+        });
+
+        document.getElementById('closeTopupModal').addEventListener('click', () => {
+            this.closeTopupModal();
+        });
+
+        // Amount selection
+        document.querySelectorAll('.amount-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                document.getElementById('customAmount').value = '';
+            });
+        });
+
+        document.getElementById('customAmount').addEventListener('input', () => {
+            document.querySelectorAll('.amount-btn').forEach(btn => btn.classList.remove('selected'));
+        });
+
+        // Proceed to upload
+        document.getElementById('proceedToUpload').addEventListener('click', () => {
+            this.initiateTopup();
+        });
+
+        // Back to amount selection
+        document.getElementById('backToAmount').addEventListener('click', () => {
+            this.showTopupStep(1);
+        });
+
+        // Upload tabs
+        document.querySelectorAll('.upload-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const type = tab.dataset.type;
+                
+                // Update active tab
+                document.querySelectorAll('.upload-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Update active content
+                document.querySelectorAll('.upload-content').forEach(content => content.classList.remove('active'));
+                document.getElementById(`upload${type.charAt(0).toUpperCase() + type.slice(1)}`).classList.add('active');
+                
+                // Enable submit button
+                document.getElementById('submitTopup').disabled = false;
+            });
+        });
+
+        // File upload
+        const fileUploadArea = document.getElementById('fileUploadArea');
+        const fileInput = document.getElementById('fileInput');
+
+        fileUploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUploadArea.classList.add('dragover');
+        });
+
+        fileUploadArea.addEventListener('dragleave', () => {
+            fileUploadArea.classList.remove('dragover');
+        });
+
+        fileUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                this.handleFileSelect();
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            this.handleFileSelect();
+        });
+
+        // Remove file
+        document.getElementById('removeFile').addEventListener('click', () => {
+            document.getElementById('filePreview').style.display = 'none';
+            document.getElementById('fileUploadArea').style.display = 'block';
+            fileInput.value = '';
+        });
+
+        // Submit topup
+        document.getElementById('submitTopup').addEventListener('click', () => {
+            this.submitTopup();
+        });
+
+        // Input validation for other upload types
+        ['base64Input', 'urlInput', 'payloadInput'].forEach(id => {
+            document.getElementById(id).addEventListener('input', () => {
+                const value = document.getElementById(id).value.trim();
+                document.getElementById('submitTopup').disabled = !value;
+            });
+        });
+    }
+
+    handleFileSelect() {
+        const fileInput = document.getElementById('fileInput');
+        const filePreview = document.getElementById('filePreview');
+        const previewImage = document.getElementById('previewImage');
+        const fileUploadArea = document.getElementById('fileUploadArea');
+        
+        if (fileInput.files && fileInput.files[0]) {
+            const file = fileInput.files[0];
+            
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    previewImage.src = e.target.result;
+                    filePreview.style.display = 'block';
+                    fileUploadArea.style.display = 'none';
+                };
+                reader.readAsDataURL(file);
+            } else {
+                // For non-image files, show file name
+                filePreview.innerHTML = `
+                    <div style="padding: 1rem; text-align: center;">
+                        <i class="fas fa-file" style="font-size: 2rem; color: #6b7280; margin-bottom: 0.5rem;"></i>
+                        <p>${file.name}</p>
+                        <button class="btn btn-outline" id="removeFile">ลบไฟล์</button>
+                    </div>
+                `;
+                filePreview.style.display = 'block';
+                fileUploadArea.style.display = 'none';
+            }
+            
+            document.getElementById('submitTopup').disabled = false;
+        }
     }
 
     async loadInitialData() {
@@ -236,7 +375,8 @@ class SMSVerificationService {
             try {
                 await Promise.all([
                     this.loadCountries(),
-                    this.loadBalance()
+                    this.loadBalance(),
+                    this.loadWalletBalance()
                 ]);
                 
                 // Set default country to Thailand (ID: 7)
@@ -548,6 +688,21 @@ class SMSVerificationService {
         console.log('🛒 กำลังซื้อบริการ:', service);
         
         try {
+            // Check wallet balance first
+            const balanceCheck = await this.checkBalance(service.price);
+            if (!balanceCheck.success || !balanceCheck.data.hasSufficient) {
+                this.showMessage('ยอดเงินไม่เพียงพอ กรุณาเติมเงิน', 'error');
+                this.openTopupModal();
+                return;
+            }
+
+            // Deduct credit from wallet
+            const deductResult = await this.deductCredit(service.price, `service_${service.id}`, `ซื้อบริการ ${service.name}`);
+            if (!deductResult.success) {
+                this.showMessage(deductResult.error.message, 'error');
+                return;
+            }
+
             // Call real API to get number
             const url = `${this.API_BASE_URL}?api_key=${this.API_KEY}&action=getNumber&service=${service.id}&operator=${this.currentOperator}&country=${this.currentCountry}&lang=${this.LANG}`;
             
@@ -556,6 +711,8 @@ class SMSVerificationService {
             console.log('📄 การตอบสนอง API:', result);
             
             if (result.includes('NO_BALANCE')) {
+                // Refund the deducted amount
+                await this.refundCredit(service.price, `service_${service.id}`, 'คืนเงินเนื่องจาก API ไม่มีเงิน');
                 this.showMessage('ยอดเงินไม่เพียงพอ', 'error');
                 return;
             }
@@ -1395,6 +1552,303 @@ class SMSVerificationService {
             overlay.classList.remove('active');
         }
         console.log('✅ โหลดเสร็จสิ้น');
+    }
+
+    // Wallet and Top-up Methods
+    async loadWalletBalance() {
+        try {
+            const response = await fetch('/api/wallet/balance');
+            const data = await response.json();
+            
+            if (data.success) {
+                this.userBalance = data.data.balance;
+                this.updateBalanceDisplay();
+            }
+        } catch (error) {
+            console.error('Error loading wallet balance:', error);
+        }
+    }
+
+    updateBalanceDisplay() {
+        const balanceElement = document.getElementById('walletBalance');
+        if (balanceElement) {
+            balanceElement.textContent = `ยอดเงิน: ฿${this.userBalance.toFixed(2)}`;
+        }
+    }
+
+    async checkBalance(amount) {
+        try {
+            const response = await fetch('/api/wallet/check-balance', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ amount })
+            });
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Error checking balance:', error);
+            return { success: false, error: { message: 'ไม่สามารถตรวจสอบยอดเงินได้' } };
+        }
+    }
+
+    async deductCredit(amount, ref, description) {
+        try {
+            const response = await fetch('/api/wallet/deduct', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ amount, ref, description })
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                this.userBalance -= amount;
+                this.updateBalanceDisplay();
+            }
+            
+            return data;
+        } catch (error) {
+            console.error('Error deducting credit:', error);
+            return { success: false, error: { message: 'ไม่สามารถหักเงินได้' } };
+        }
+    }
+
+    async refundCredit(amount, ref, description) {
+        try {
+            const response = await fetch('/api/wallet/refund', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ amount, ref, description })
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                this.userBalance += amount;
+                this.updateBalanceDisplay();
+            }
+            
+            return data;
+        } catch (error) {
+            console.error('Error refunding credit:', error);
+            return { success: false, error: { message: 'ไม่สามารถคืนเงินได้' } };
+        }
+    }
+
+    // Top-up Modal Methods
+    openTopupModal() {
+        const modal = document.getElementById('topupModal');
+        if (modal) {
+            modal.style.display = 'flex';
+            this.resetTopupModal();
+        }
+    }
+
+    closeTopupModal() {
+        const modal = document.getElementById('topupModal');
+        if (modal) {
+            modal.style.display = 'none';
+            this.resetTopupModal();
+        }
+    }
+
+    resetTopupModal() {
+        // Reset to step 1
+        this.showTopupStep(1);
+        
+        // Clear form data
+        document.querySelectorAll('.amount-btn').forEach(btn => btn.classList.remove('selected'));
+        document.getElementById('customAmount').value = '';
+        document.getElementById('topupMethod').value = 'bank';
+        
+        // Clear upload data
+        document.getElementById('fileInput').value = '';
+        document.getElementById('base64Input').value = '';
+        document.getElementById('urlInput').value = '';
+        document.getElementById('payloadInput').value = '';
+        document.getElementById('filePreview').style.display = 'none';
+        
+        // Reset upload tabs
+        document.querySelectorAll('.upload-tab').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.upload-content').forEach(content => content.classList.remove('active'));
+        document.querySelector('[data-type="image"]').classList.add('active');
+        document.getElementById('uploadImage').classList.add('active');
+        
+        // Clear current topup
+        this.currentTopupId = null;
+        if (this.topupPollingInterval) {
+            clearInterval(this.topupPollingInterval);
+            this.topupPollingInterval = null;
+        }
+    }
+
+    showTopupStep(step) {
+        document.querySelectorAll('.topup-step').forEach(stepEl => {
+            stepEl.style.display = 'none';
+        });
+        document.getElementById(`topupStep${step}`).style.display = 'block';
+    }
+
+    async initiateTopup() {
+        const amount = this.getSelectedAmount();
+        const method = document.getElementById('topupMethod').value;
+        
+        if (!amount || amount <= 0) {
+            this.showMessage('กรุณาเลือกจำนวนเงิน', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/topup/initiate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ amount, method })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.currentTopupId = data.data.topupId;
+                this.showTopupStep(2);
+            } else {
+                this.showMessage(data.error.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error initiating topup:', error);
+            this.showMessage('ไม่สามารถเริ่มต้นการเติมเงินได้', 'error');
+        }
+    }
+
+    getSelectedAmount() {
+        const selectedBtn = document.querySelector('.amount-btn.selected');
+        if (selectedBtn) {
+            return parseFloat(selectedBtn.dataset.amount);
+        }
+        
+        const customAmount = document.getElementById('customAmount').value;
+        if (customAmount) {
+            return parseFloat(customAmount);
+        }
+        
+        return 0;
+    }
+
+    async submitTopup() {
+        const uploadType = document.querySelector('.upload-tab.active').dataset.type;
+        const formData = new FormData();
+        
+        formData.append('topupId', this.currentTopupId);
+        formData.append('type', uploadType);
+        formData.append('checkDuplicate', 'true');
+
+        try {
+            let response;
+            
+            if (uploadType === 'image') {
+                const fileInput = document.getElementById('fileInput');
+                if (!fileInput.files[0]) {
+                    this.showMessage('กรุณาเลือกไฟล์', 'error');
+                    return;
+                }
+                formData.append('file', fileInput.files[0]);
+                response = await fetch('/api/topup/verify', {
+                    method: 'POST',
+                    body: formData
+                });
+            } else {
+                const data = {
+                    topupId: this.currentTopupId,
+                    type: uploadType,
+                    checkDuplicate: true
+                };
+                
+                if (uploadType === 'base64') {
+                    data.base64 = document.getElementById('base64Input').value;
+                } else if (uploadType === 'url') {
+                    data.url = document.getElementById('urlInput').value;
+                } else if (uploadType === 'payload') {
+                    data.payload = document.getElementById('payloadInput').value;
+                }
+                
+                if (!data[uploadType]) {
+                    this.showMessage(`กรุณาใส่ข้อมูล${uploadType}`, 'error');
+                    return;
+                }
+                
+                response = await fetch('/api/topup/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+            }
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showTopupStep(3);
+                this.startTopupPolling();
+            } else {
+                this.showTopupStep(4);
+                this.showTopupResult(false, result.error.message);
+            }
+        } catch (error) {
+            console.error('Error submitting topup:', error);
+            this.showMessage('ไม่สามารถส่งข้อมูลได้', 'error');
+        }
+    }
+
+    startTopupPolling() {
+        this.topupPollingInterval = setInterval(async () => {
+            try {
+                const response = await fetch(`/api/topup/${this.currentTopupId}/status`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    if (data.data.status === 'verified') {
+                        clearInterval(this.topupPollingInterval);
+                        this.topupPollingInterval = null;
+                        this.showTopupStep(4);
+                        this.showTopupResult(true, `เติมเงินสำเร็จ ฿${data.data.amount}`);
+                        await this.loadWalletBalance();
+                    } else if (data.data.status === 'failed') {
+                        clearInterval(this.topupPollingInterval);
+                        this.topupPollingInterval = null;
+                        this.showTopupStep(4);
+                        this.showTopupResult(false, data.data.error_message || 'การเติมเงินล้มเหลว');
+                    }
+                }
+            } catch (error) {
+                console.error('Error polling topup status:', error);
+            }
+        }, 3000);
+    }
+
+    showTopupResult(success, message) {
+        const resultStatus = document.getElementById('resultStatus');
+        const icon = success ? 'check-circle' : 'exclamation-circle';
+        const className = success ? 'result-success' : 'result-error';
+        const title = success ? 'สำเร็จ' : 'ล้มเหลว';
+        
+        resultStatus.innerHTML = `
+            <div class="${className}">
+                <i class="fas fa-${icon}"></i>
+                <h4>${title}</h4>
+                <p>${message}</p>
+                <div class="result-actions">
+                    <button class="btn btn-primary" onclick="smsService.closeTopupModal()">
+                        ${success ? 'ปิด' : 'ลองอีกครั้ง'}
+                    </button>
+                </div>
+            </div>
+        `;
     }
 
     showMessage(message, type) {

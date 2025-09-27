@@ -25,7 +25,11 @@
                     <a href="#help" class="nav-link">ช่วยเหลือ</a>
                 </nav>
                 <div class="header-actions">
-                    <span class="balance-display">ยอดเงิน: $0.00</span>
+                    <span class="balance-display" id="walletBalance">ยอดเงิน: ฿0.00</span>
+                    <button class="btn btn-primary" id="topupBtn">
+                        <i class="fas fa-plus"></i>
+                        เติมเงิน
+                    </button>
                 </div>
             </div>
         </div>
@@ -166,6 +170,122 @@
         </div>
     </footer>
 
+
+    <!-- Top-up Modal -->
+    <div id="topupModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>เติมเงิน</h3>
+                <button class="modal-close" id="closeTopupModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Step 1: Amount Selection -->
+                <div id="topupStep1" class="topup-step">
+                    <div class="form-group">
+                        <label>จำนวนเงิน</label>
+                        <div class="amount-presets">
+                            <button class="amount-btn" data-amount="50">฿50</button>
+                            <button class="amount-btn" data-amount="100">฿100</button>
+                            <button class="amount-btn" data-amount="200">฿200</button>
+                            <button class="amount-btn" data-amount="500">฿500</button>
+                            <button class="amount-btn" data-amount="1000">฿1,000</button>
+                        </div>
+                        <input type="number" id="customAmount" placeholder="จำนวนเงินอื่นๆ" min="1" step="0.01">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>วิธีการเติมเงิน</label>
+                        <select id="topupMethod">
+                            <option value="bank">ธนาคาร</option>
+                            <option value="truewallet">TrueMoney Wallet</option>
+                        </select>
+                    </div>
+                    
+                    <button class="btn btn-primary" id="proceedToUpload">ดำเนินการต่อ</button>
+                </div>
+
+                <!-- Step 2: Upload Evidence -->
+                <div id="topupStep2" class="topup-step" style="display: none;">
+                    <div class="upload-options">
+                        <div class="upload-tabs">
+                            <button class="upload-tab active" data-type="image">
+                                <i class="fas fa-image"></i>
+                                อัปโหลดรูป
+                            </button>
+                            <button class="upload-tab" data-type="base64">
+                                <i class="fas fa-code"></i>
+                                Base64
+                            </button>
+                            <button class="upload-tab" data-type="url">
+                                <i class="fas fa-link"></i>
+                                URL
+                            </button>
+                            <button class="upload-tab" data-type="payload">
+                                <i class="fas fa-qrcode"></i>
+                                QR Payload
+                            </button>
+                        </div>
+
+                        <!-- Image Upload -->
+                        <div id="uploadImage" class="upload-content active">
+                            <div class="file-upload-area" id="fileUploadArea">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p>ลากไฟล์มาที่นี่ หรือคลิกเพื่อเลือกไฟล์</p>
+                                <input type="file" id="fileInput" accept="image/*,.pdf" style="display: none;">
+                            </div>
+                            <div id="filePreview" class="file-preview" style="display: none;">
+                                <img id="previewImage" src="" alt="Preview">
+                                <button class="btn btn-outline" id="removeFile">ลบไฟล์</button>
+                            </div>
+                        </div>
+
+                        <!-- Base64 Input -->
+                        <div id="uploadBase64" class="upload-content">
+                            <textarea id="base64Input" placeholder="วางข้อมูล base64 ที่นี่..." rows="6"></textarea>
+                        </div>
+
+                        <!-- URL Input -->
+                        <div id="uploadUrl" class="upload-content">
+                            <input type="url" id="urlInput" placeholder="https://example.com/image.jpg">
+                        </div>
+
+                        <!-- QR Payload Input -->
+                        <div id="uploadPayload" class="upload-content">
+                            <textarea id="payloadInput" placeholder="วาง QR payload ที่นี่..." rows="6"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="topup-actions">
+                        <button class="btn btn-outline" id="backToAmount">ย้อนกลับ</button>
+                        <button class="btn btn-primary" id="submitTopup" disabled>ยืนยันการเติมเงิน</button>
+                    </div>
+                </div>
+
+                <!-- Step 3: Processing -->
+                <div id="topupStep3" class="topup-step" style="display: none;">
+                    <div class="processing-status">
+                        <div class="status-icon">
+                            <i class="fas fa-spinner fa-spin"></i>
+                        </div>
+                        <h4>กำลังตรวจสอบสลิป</h4>
+                        <p id="processingMessage">กรุณารอสักครู่...</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Result -->
+                <div id="topupStep4" class="topup-step" style="display: none;">
+                    <div class="result-status" id="resultStatus">
+                        <!-- Success or error content will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMS Verification Number - รับหมายเลขชั่วคราว</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/additional-styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+    <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-sms"></i>
+                    <span>รับ SMS ออนไลน์</span>
+                </div>
+                <nav class="nav">
+                    <a href="#pricing" class="nav-link">ราคา</a>
+                    <a href="#api" class="nav-link">API</a>
+                    <a href="#receive" class="nav-link">รับ SMS ออนไลน์</a>
+                    <a href="#help" class="nav-link">ช่วยเหลือ</a>
+                </nav>
+                <div class="header-actions">
+                    <span class="balance-display">ยอดเงิน: $0.00</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="container">
+                <div class="hero-content">
+                    <h1>รับ SMS ออนไลน์</h1>
+                    <p>รับหมายเลขโทรศัพท์ชั่วคราวสำหรับการยืนยัน SMS จากทั่วโลก</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Interactive Section -->
+        <section class="interactive-section">
+            <div class="container">
+                <div class="selection-panel">
+                    <div class="selection-group">
+                        <div class="selection-item">
+                            <label for="countrySelect">
+                                <i class="fas fa-globe"></i>
+                                ประเทศ
+                            </label>
+                            <select id="countrySelect" class="select">
+                                <option value="">กำลังโหลด...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="selection-item">
+                            <label for="operatorSelect">
+                                <i class="fas fa-broadcast-tower"></i>
+                                ผู้ให้บริการ
+                            </label>
+                            <select id="operatorSelect" class="select">
+                                <option value="any">สุ่ม</option>
+                            </select>
+        </div>
+
+                        <div class="selection-item">
+                            <label for="serviceFilter">
+                                <i class="fas fa-filter"></i>
+                                ประเภทบริการ
+                            </label>
+                            <select id="serviceFilter" class="select">
+                                <option value="all">บริการทั้งหมด</option>
+                                <option value="social">โซเชียลมีเดีย</option>
+                                <option value="finance">การเงิน</option>
+                                <option value="gaming">เกม</option>
+                                <option value="shopping">ช้อปปิ้ง</option>
+                    </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Services Display -->
+                <div class="services-section">
+                    <div class="services-header">
+                        <h2>บริการที่มี</h2>
+                        <div class="services-stats">
+                            <span id="totalServices">0</span> บริการที่พร้อมใช้งาน
+                        </div>
+                    </div>
+                    
+                    <div class="services-container">
+                        <div id="servicesGrid" class="services-grid">
+                            <div class="loading">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                กำลังโหลดบริการ...
+                            </div>
+                        </div>
+                        
+                        <div class="services-actions">
+                            <button class="btn btn-outline" id="showMoreBtn" style="display: none;">
+                                <i class="fas fa-plus"></i>
+                                แสดงบริการเพิ่มเติม
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Activation Section -->
+        <section id="activationSection" class="activation-section">
+            <div class="container">
+                <div class="activation-header">
+                    <h2>หมายเลขที่ใช้งาน</h2>
+                    <p>จัดการหมายเลขโทรศัพท์ที่ใช้งานอยู่</p>
+                </div>
+                
+                <div id="activationsList" class="activations-list">
+                    <div class="no-activations">
+                        <i class="fas fa-mobile-alt"></i>
+                        <p>ยังไม่มีหมายเลขที่ใช้งาน</p>
+                        <p>ซื้อบริการด้านบนเพื่อเริ่มต้น</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>บริการ</h3>
+                    <ul>
+                        <li><a href="#">รับ SMS</a></li>
+                        <li><a href="#">ยืนยันหมายเลขโทรศัพท์</a></li>
+                        <li><a href="#">เชื่อมต่อ API</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h3>สนับสนุน</h3>
+                    <ul>
+                        <li><a href="#">ศูนย์ช่วยเหลือ</a></li>
+                        <li><a href="#">ติดต่อเรา</a></li>
+                        <li><a href="#">คำถามที่พบบ่อย</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h3>บริษัท</h3>
+                    <ul>
+                        <li><a href="#">เกี่ยวกับเรา</a></li>
+                        <li><a href="#">เงื่อนไขการใช้งาน</a></li>
+                        <li><a href="#">นโยบายความเป็นส่วนตัว</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 รับ SMS ออนไลน์ สงวนลิขสิทธิ์</p>
+            </div>
+        </div>
+    </footer>
+
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>กำลังโหลด...</p>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/script.js"></script>
+</body>
+</html>

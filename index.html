@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/additional-styles.css">
     <link rel="stylesheet" href="css/wallet-styles.css">
+    <link rel="stylesheet" href="css/auth-styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
@@ -26,15 +27,41 @@
                     <a href="#help" class="nav-link">ช่วยเหลือ</a>
                 </nav>
                 <div class="header-actions">
-                    <div class="wallet-info" id="walletInfo">
-                        <div class="wallet-balance">
-                            <i class="fas fa-wallet"></i>
-                            <span id="walletBalance">฿0.00</span>
-                        </div>
-                        <button class="btn btn-outline" id="topupBtn">
-                            <i class="fas fa-plus"></i>
-                            เติมเงิน
+                    <!-- Not logged in state -->
+                    <div class="header-auth" id="headerAuthNotLoggedIn" style="display: none;">
+                        <button class="header-auth-button outline" id="loginBtn">
+                            <i class="fas fa-sign-in-alt"></i>
+                            เข้าสู่ระบบ
                         </button>
+                        <button class="header-auth-button" id="registerBtn">
+                            <i class="fas fa-user-plus"></i>
+                            สมัครสมาชิก
+                        </button>
+                    </div>
+                    
+                    <!-- Logged in state -->
+                    <div class="header-auth" id="headerAuthLoggedIn" style="display: none;">
+                        <div class="header-auth-user">
+                            <div class="header-auth-user-avatar" id="userAvatar">U</div>
+                            <div class="header-auth-user-info">
+                                <div class="header-auth-user-name" id="userName">ผู้ใช้</div>
+                                <div class="header-auth-user-balance" id="userBalance">฿0.00</div>
+                            </div>
+                        </div>
+                        <div class="header-auth-actions">
+                            <button class="header-auth-button outline" id="topupBtn">
+                                <i class="fas fa-plus"></i>
+                                เติมเงิน
+                            </button>
+                            <button class="header-auth-button outline" id="historyBtn">
+                                <i class="fas fa-history"></i>
+                                ประวัติ
+                            </button>
+                            <button class="header-auth-button danger" id="logoutBtn">
+                                <i class="fas fa-sign-out-alt"></i>
+                                ออกจากระบบ
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -288,6 +315,73 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline" onclick="closeTopupStatusModal()">ปิด</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Authentication Modal -->
+    <div id="authModal" class="auth-modal">
+        <div class="auth-modal-content">
+            <button class="auth-modal-close" id="authModalClose">&times;</button>
+            <div class="auth-modal-header">
+                <h2 class="auth-modal-title">เข้าสู่ระบบ</h2>
+                <div class="auth-tabs">
+                    <button class="auth-tab active" data-tab="login">เข้าสู่ระบบ</button>
+                    <button class="auth-tab" data-tab="register">สมัครสมาชิก</button>
+                </div>
+            </div>
+            <div class="auth-modal-body">
+                <!-- Success/Error Messages -->
+                <div class="auth-success-message" id="authSuccessMessage"></div>
+                <div class="auth-error-message" id="authErrorMessage"></div>
+                
+                <!-- Login Form -->
+                <form class="auth-form active" id="loginForm">
+                    <div class="auth-form-group">
+                        <label class="auth-form-label" for="loginEmail">อีเมล</label>
+                        <input type="email" id="loginEmail" class="auth-form-input" placeholder="กรอกอีเมลของคุณ" required>
+                        <div class="auth-form-error" id="loginEmailError"></div>
+                    </div>
+                    <div class="auth-form-group">
+                        <label class="auth-form-label" for="loginPassword">รหัสผ่าน</label>
+                        <input type="password" id="loginPassword" class="auth-form-input" placeholder="กรอกรหัสผ่านของคุณ" required>
+                        <div class="auth-form-error" id="loginPasswordError"></div>
+                    </div>
+                    <button type="submit" class="auth-form-button" id="loginSubmitBtn">
+                        เข้าสู่ระบบ
+                    </button>
+                    <div class="auth-form-link">
+                        <a href="#" id="forgotPasswordLink">ลืมรหัสผ่าน?</a>
+                    </div>
+                </form>
+                
+                <!-- Register Form -->
+                <form class="auth-form" id="registerForm">
+                    <div class="auth-form-group">
+                        <label class="auth-form-label" for="registerEmail">อีเมล</label>
+                        <input type="email" id="registerEmail" class="auth-form-input" placeholder="กรอกอีเมลของคุณ" required>
+                        <div class="auth-form-error" id="registerEmailError"></div>
+                    </div>
+                    <div class="auth-form-group">
+                        <label class="auth-form-label" for="registerPassword">รหัสผ่าน</label>
+                        <input type="password" id="registerPassword" class="auth-form-input" placeholder="รหัสผ่านอย่างน้อย 8 ตัวอักษร" required>
+                        <div class="auth-form-error" id="registerPasswordError"></div>
+                    </div>
+                    <div class="auth-form-group">
+                        <label class="auth-form-label" for="registerConfirmPassword">ยืนยันรหัสผ่าน</label>
+                        <input type="password" id="registerConfirmPassword" class="auth-form-input" placeholder="ยืนยันรหัสผ่าน" required>
+                        <div class="auth-form-error" id="registerConfirmPasswordError"></div>
+                    </div>
+                    <div class="auth-form-checkbox">
+                        <input type="checkbox" id="agreeTerms" required>
+                        <label for="agreeTerms">
+                            ฉันยอมรับ <a href="#" target="_blank">ข้อตกลงการใช้งาน</a> และ <a href="#" target="_blank">นโยบายความเป็นส่วนตัว</a>
+                        </label>
+                    </div>
+                    <button type="submit" class="auth-form-button" id="registerSubmitBtn">
+                        สมัครสมาชิก
+                    </button>
+                </form>
             </div>
         </div>
     </div>

@@ -1,99 +1,111 @@
-// Wallet Service - Credit Management
+// Wallet Service - Credit Management with User Authentication
 class WalletService {
     constructor(database) {
         this.db = database;
     }
 
-    // Get or create user by session
-    async getUserBySession(sessionId) {
-        let user = await this.db.get(
-            'SELECT * FROM users WHERE session_id = ?',
-            [sessionId]
+    // Get user balance by user ID
+    async getBalance(userId) {
+        const wallet = await this.db.get(
+            'SELECT balance FROM wallets WHERE user_id = ?',
+            [userId]
         );
 
-        if (!user) {
-            const result = await this.db.run(
-                'INSERT INTO users (session_id, balance) VALUES (?, ?)',
-                [sessionId, 0.00]
+        if (!wallet) {
+            // Create wallet if it doesn't exist
+            await this.db.run(
+                'INSERT INTO wallets (user_id, balance) VALUES (?, 0.00)',
+                [userId]
             );
-            user = await this.db.get(
-                'SELECT * FROM users WHERE id = ?',
-                [result.id]
-            );
+            return { balance: 0.00 };
         }
 
-        return user;
-    }
-
-    // Get user balance
-    async getBalance(sessionId) {
-        const user = await this.getUserBySession(sessionId);
         return {
-            balance: parseFloat(user.balance.toFixed(2))
+            balance: parseFloat(wallet.balance.toFixed(2))
         };
     }
 
-    // Get transaction history
-    async getTransactionHistory(sessionId, limit = 50) {
-        const user = await this.getUserBySession(sessionId);
-        
+    // Get transaction history by user ID
+    async getTransactionHistory(userId, limit = 50) {
         const transactions = await this.db.all(`
-            SELECT id, type, amount, reference, description, created_at
-            FROM wallet_transactions 
+            SELECT id, type, amount, ref, description, created_at
+            FROM wallet_ledger 
             WHERE user_id = ?
             ORDER BY created_at DESC
             LIMIT ?
-        `, [user.id, limit]);
+        `, [userId, limit]);
 
         return transactions.map(tx => ({
             id: tx.id,
             type: tx.type,
             amount: parseFloat(tx.amount.toFixed(2)),
-            reference: tx.reference,
+            reference: tx.ref,
             description: tx.description,
             createdAt: tx.created_at
         }));
     }
 
     // Add transaction and update balance
-    async addTransaction(sessionId, type, amount, reference = null, description = null) {
-        const user = await this.getUserBySession(sessionId);
-        
+    async addTransaction(userId, type, amount, reference = null, description = null) {
         // Insert transaction
         const result = await this.db.run(`
-            INSERT INTO wallet_transactions (user_id, type, amount, reference, description)
+            INSERT INTO wallet_ledger (user_id, type, amount, ref, description)
             VALUES (?, ?, ?, ?, ?)
-        `, [user.id, type, amount, reference, description]);
+        `, [userId, type, amount, reference, description]);
 
-        // Update user balance
-        const newBalance = user.balance + amount;
-        await this.db.run(
-            'UPDATE users SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-            [newBalance, user.id]
+        // Update wallet balance
+        const currentWallet = await this.db.get(
+            'SELECT balance FROM wallets WHERE user_id = ?',
+            [userId]
         );
+
+        if (!currentWallet) {
+            // Create wallet if it doesn't exist
+            await this.db.run(
+                'INSERT INTO wallets (user_id, balance) VALUES (?, ?)',
+                [userId, amount]
+            );
+        } else {
+            const newBalance = currentWallet.balance + amount;
+            await this.db.run(
+                'UPDATE wallets SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+                [newBalance, userId]
+            );
+        }
 
         return {
             transactionId: result.id,
-            newBalance: parseFloat(newBalance.toFixed(2))
+            newBalance: parseFloat((currentWallet ? currentWallet.balance + amount : amount).toFixed(2))
         };
     }
 
     // Check if user has sufficient credit
-    async hasSufficientCredit(sessionId, requiredAmount) {
-        const user = await this.getUserBySession(sessionId);
-        return user.balance >= requiredAmount;
+    async hasSufficientCredit(userId, requiredAmount) {
+        const wallet = await this.db.get(
+            'SELECT balance FROM wallets WHERE user_id = ?',
+            [userId]
+        );
+
+        if (!wallet) {
+            return false;
+        }
+
+        return wallet.balance >= requiredAmount;
     }
 
     // Deduct credit (for purchases)
-    async deductCredit(sessionId, amount, orderId) {
-        const user = await this.getUserBySession(sessionId);
-        
-        if (user.balance < amount) {
+    async deductCredit(userId, amount, orderId) {
+        const wallet = await this.db.get(
+            'SELECT balance FROM wallets WHERE user_id = ?',
+            [userId]
+        );
+
+        if (!wallet || wallet.balance < amount) {
             throw new Error('INSUFFICIENT_CREDIT');
         }
 
         return await this.addTransaction(
-            sessionId,
+            userId,
             'purchase',
             -amount,
             orderId,
@@ -102,9 +114,9 @@ class WalletService {
     }
 
     // Add credit (for top-ups)
-    async addCredit(sessionId, amount, topupId) {
+    async addCredit(userId, amount, topupId) {
         return await this.addTransaction(
-            sessionId,
+            userId,
             'topup',
             amount,
             topupId,
@@ -113,14 +125,25 @@ class WalletService {
     }
 
     // Refund credit
-    async refundCredit(sessionId, amount, orderId) {
+    async refundCredit(userId, amount, orderId) {
         return await this.addTransaction(
-            sessionId,
+            userId,
             'refund',
             amount,
             orderId,
             `Refund for order #${orderId}`
         );
+    }
+
+    // Get wallet summary
+    async getWalletSummary(userId) {
+        const wallet = await this.getBalance(userId);
+        const recentTransactions = await this.getTransactionHistory(userId, 10);
+        
+        return {
+            balance: wallet.balance,
+            recentTransactions
+        };
     }
 }
 

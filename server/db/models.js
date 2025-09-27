@@ -24,31 +24,56 @@ class Database {
 
     async createTables() {
         const tables = [
-            // Users table (simplified - no auth for now)
+            // Users table with authentication
             `CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT UNIQUE,
-                balance REAL DEFAULT 0.00,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                status TEXT DEFAULT 'active' CHECK (status IN ('active', 'blocked', 'unverified')),
+                role TEXT DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+                display_name TEXT,
+                avatar_url TEXT,
+                phone TEXT,
+                last_login_at DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )`,
 
-            // Wallet transactions
-            `CREATE TABLE IF NOT EXISTS wallet_transactions (
+            // User sessions for JWT token management
+            `CREATE TABLE IF NOT EXISTS user_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
+                user_id INTEGER NOT NULL,
+                refresh_token TEXT UNIQUE NOT NULL,
+                expires_at DATETIME NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+            )`,
+
+            // Wallet table (separate from users for better normalization)
+            `CREATE TABLE IF NOT EXISTS wallets (
+                user_id INTEGER PRIMARY KEY,
+                balance REAL DEFAULT 0.00,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+            )`,
+
+            // Wallet transactions (renamed from wallet_transactions)
+            `CREATE TABLE IF NOT EXISTS wallet_ledger (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
                 type TEXT NOT NULL CHECK (type IN ('topup', 'purchase', 'refund', 'adjustment')),
                 amount REAL NOT NULL,
-                reference TEXT,
+                ref TEXT,
                 description TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (id)
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
             )`,
 
             // Top-up requests
             `CREATE TABLE IF NOT EXISTS topup_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
+                user_id INTEGER NOT NULL,
                 amount_thb REAL NOT NULL,
                 method TEXT NOT NULL,
                 status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'verified', 'failed')),
@@ -57,13 +82,13 @@ class Database {
                 reason TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 verified_at DATETIME,
-                FOREIGN KEY (user_id) REFERENCES users (id)
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
             )`,
 
             // Orders/Purchases
             `CREATE TABLE IF NOT EXISTS orders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
+                user_id INTEGER NOT NULL,
                 service_id TEXT NOT NULL,
                 operator_code TEXT,
                 country_code TEXT,
@@ -78,7 +103,7 @@ class Database {
                 status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'cancelled', 'expired')),
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 completed_at DATETIME,
-                FOREIGN KEY (user_id) REFERENCES users (id)
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
             )`,
 
             // FX Rate cache
@@ -99,11 +124,41 @@ class Database {
                 base_vendor_price REAL NOT NULL,
                 vendor_currency TEXT NOT NULL,
                 cached_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`,
+
+            // Login attempts for rate limiting
+            `CREATE TABLE IF NOT EXISTS login_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                ip_address TEXT NOT NULL,
+                success BOOLEAN NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )`
         ];
 
         for (const table of tables) {
             await this.run(table);
+        }
+
+        // Create indexes for better performance
+        const indexes = [
+            'CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)',
+            'CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)',
+            'CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id)',
+            'CREATE INDEX IF NOT EXISTS idx_user_sessions_refresh_token ON user_sessions(refresh_token)',
+            'CREATE INDEX IF NOT EXISTS idx_wallet_ledger_user_id ON wallet_ledger(user_id)',
+            'CREATE INDEX IF NOT EXISTS idx_wallet_ledger_created_at ON wallet_ledger(created_at)',
+            'CREATE INDEX IF NOT EXISTS idx_topup_requests_user_id ON topup_requests(user_id)',
+            'CREATE INDEX IF NOT EXISTS idx_topup_requests_status ON topup_requests(status)',
+            'CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)',
+            'CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)',
+            'CREATE INDEX IF NOT EXISTS idx_login_attempts_email ON login_attempts(email)',
+            'CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address)',
+            'CREATE INDEX IF NOT EXISTS idx_login_attempts_created_at ON login_attempts(created_at)'
+        ];
+
+        for (const index of indexes) {
+            await this.run(index);
         }
     }
 

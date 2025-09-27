@@ -25,6 +25,12 @@ class SMSVerificationService {
         this.topupStatusModal = null;
         this.topupStatusInterval = null;
         
+        // Authentication features
+        this.currentUser = null;
+        this.accessToken = null;
+        this.authModal = null;
+        this.isAuthenticated = false;
+        
         // Stability improvements
         this.retryAttempts = 3;
         this.retryDelay = 1000; // 1 second
@@ -1807,11 +1813,472 @@ class SMSVerificationService {
             this.closeTopupStatusModal();
         }
     }
+
+    // Authentication Methods
+    async initAuth() {
+        // Check if user is already logged in
+        await this.checkAuthStatus();
+        
+        // Set up auth modal
+        this.authModal = document.getElementById('authModal');
+        
+        // Set up event listeners
+        this.setupAuthEventListeners();
+        
+        // Update header based on auth status
+        this.updateHeaderAuth();
+    }
+
+    setupAuthEventListeners() {
+        // Auth modal buttons
+        document.getElementById('loginBtn')?.addEventListener('click', () => this.showAuthModal('login'));
+        document.getElementById('registerBtn')?.addEventListener('click', () => this.showAuthModal('register'));
+        document.getElementById('logoutBtn')?.addEventListener('click', () => this.logout());
+        document.getElementById('historyBtn')?.addEventListener('click', () => this.showTransactionHistory());
+        
+        // Auth modal close
+        document.getElementById('authModalClose')?.addEventListener('click', () => this.hideAuthModal());
+        
+        // Auth modal tabs
+        document.querySelectorAll('.auth-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                const tabName = e.target.dataset.tab;
+                this.switchAuthTab(tabName);
+            });
+        });
+        
+        // Auth forms
+        document.getElementById('loginForm')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleLogin();
+        });
+        
+        document.getElementById('registerForm')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleRegister();
+        });
+        
+        // Top-up button (requires auth)
+        document.getElementById('topupBtn')?.addEventListener('click', () => {
+            if (!this.isAuthenticated) {
+                this.showAuthModal('login');
+            } else {
+                this.showTopupModal();
+            }
+        });
+    }
+
+    async checkAuthStatus() {
+        try {
+            const response = await this.makeRequest('/api/auth/me', 'GET');
+            if (response.user) {
+                this.currentUser = response.user;
+                this.isAuthenticated = true;
+                await this.loadWalletBalance();
+            }
+        } catch (error) {
+            // User not authenticated
+            this.currentUser = null;
+            this.isAuthenticated = false;
+        }
+    }
+
+    showAuthModal(tab = 'login') {
+        this.authModal.classList.add('show');
+        this.switchAuthTab(tab);
+        this.clearAuthMessages();
+    }
+
+    hideAuthModal() {
+        this.authModal.classList.remove('show');
+        this.clearAuthMessages();
+        this.clearAuthForms();
+    }
+
+    switchAuthTab(tabName) {
+        // Update tabs
+        document.querySelectorAll('.auth-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        
+        // Update forms
+        document.querySelectorAll('.auth-form').forEach(form => {
+            form.classList.remove('active');
+        });
+        document.getElementById(`${tabName}Form`).classList.add('active');
+        
+        // Update title
+        document.querySelector('.auth-modal-title').textContent = 
+            tabName === 'login' ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก';
+    }
+
+    async handleLogin() {
+        const email = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+        
+        this.setAuthButtonLoading('loginSubmitBtn', true);
+        this.clearAuthMessages();
+        
+        try {
+            const response = await this.makeRequest('/api/auth/login', 'POST', {
+                email,
+                password
+            });
+            
+            this.currentUser = response.user;
+            this.accessToken = response.accessToken;
+            this.isAuthenticated = true;
+            
+            this.showAuthMessage('success', 'เข้าสู่ระบบสำเร็จ!');
+            
+            // Load wallet balance and update UI
+            await this.loadWalletBalance();
+            this.updateHeaderAuth();
+            
+            // Close modal after short delay
+            setTimeout(() => {
+                this.hideAuthModal();
+            }, 1500);
+            
+        } catch (error) {
+            this.showAuthMessage('error', error.message || 'เข้าสู่ระบบไม่สำเร็จ');
+        } finally {
+            this.setAuthButtonLoading('loginSubmitBtn', false);
+        }
+    }
+
+    async handleRegister() {
+        const email = document.getElementById('registerEmail').value;
+        const password = document.getElementById('registerPassword').value;
+        const confirmPassword = document.getElementById('registerConfirmPassword').value;
+        
+        // Validate passwords match
+        if (password !== confirmPassword) {
+            this.showAuthMessage('error', 'รหัสผ่านไม่ตรงกัน');
+            return;
+        }
+        
+        this.setAuthButtonLoading('registerSubmitBtn', true);
+        this.clearAuthMessages();
+        
+        try {
+            const response = await this.makeRequest('/api/auth/register', 'POST', {
+                email,
+                password
+            });
+            
+            this.currentUser = response.user;
+            this.accessToken = response.accessToken;
+            this.isAuthenticated = true;
+            
+            this.showAuthMessage('success', response.message || 'สมัครสมาชิกสำเร็จ!');
+            
+            // Load wallet balance and update UI
+            await this.loadWalletBalance();
+            this.updateHeaderAuth();
+            
+            // Close modal after short delay
+            setTimeout(() => {
+                this.hideAuthModal();
+            }, 1500);
+            
+        } catch (error) {
+            this.showAuthMessage('error', error.message || 'สมัครสมาชิกไม่สำเร็จ');
+        } finally {
+            this.setAuthButtonLoading('registerSubmitBtn', false);
+        }
+    }
+
+    async logout() {
+        try {
+            await this.makeRequest('/api/auth/logout', 'POST');
+        } catch (error) {
+            console.error('Logout error:', error);
+        } finally {
+            this.currentUser = null;
+            this.accessToken = null;
+            this.isAuthenticated = false;
+            this.walletBalance = 0;
+            
+            this.updateHeaderAuth();
+            this.hideAuthModal();
+        }
+    }
+
+    updateHeaderAuth() {
+        const notLoggedIn = document.getElementById('headerAuthNotLoggedIn');
+        const loggedIn = document.getElementById('headerAuthLoggedIn');
+        
+        if (this.isAuthenticated) {
+            notLoggedIn.style.display = 'none';
+            loggedIn.style.display = 'flex';
+            
+            // Update user info
+            const userName = document.getElementById('userName');
+            const userBalance = document.getElementById('userBalance');
+            const userAvatar = document.getElementById('userAvatar');
+            
+            if (userName) userName.textContent = this.currentUser.email;
+            if (userBalance) userBalance.textContent = `฿${this.walletBalance.toFixed(2)}`;
+            if (userAvatar) userAvatar.textContent = this.currentUser.email.charAt(0).toUpperCase();
+        } else {
+            notLoggedIn.style.display = 'flex';
+            loggedIn.style.display = 'none';
+        }
+    }
+
+    async loadWalletBalance() {
+        if (!this.isAuthenticated) return;
+        
+        try {
+            const response = await this.makeRequest('/api/wallet/balance', 'GET');
+            this.walletBalance = response.balance;
+            this.updateHeaderAuth();
+        } catch (error) {
+            console.error('Failed to load wallet balance:', error);
+        }
+    }
+
+    showAuthMessage(type, message) {
+        const successMsg = document.getElementById('authSuccessMessage');
+        const errorMsg = document.getElementById('authErrorMessage');
+        
+        if (type === 'success') {
+            successMsg.textContent = message;
+            successMsg.classList.add('show');
+            errorMsg.classList.remove('show');
+        } else {
+            errorMsg.textContent = message;
+            errorMsg.classList.add('show');
+            successMsg.classList.remove('show');
+        }
+    }
+
+    clearAuthMessages() {
+        document.getElementById('authSuccessMessage').classList.remove('show');
+        document.getElementById('authErrorMessage').classList.remove('show');
+    }
+
+    clearAuthForms() {
+        document.getElementById('loginForm').reset();
+        document.getElementById('registerForm').reset();
+    }
+
+    setAuthButtonLoading(buttonId, loading) {
+        const button = document.getElementById(buttonId);
+        if (loading) {
+            button.classList.add('loading');
+            button.disabled = true;
+        } else {
+            button.classList.remove('loading');
+            button.disabled = false;
+        }
+    }
+
+    async showTransactionHistory() {
+        if (!this.isAuthenticated) {
+            this.showAuthModal('login');
+            return;
+        }
+        
+        try {
+            const response = await this.makeRequest('/api/wallet/transactions', 'GET');
+            this.displayTransactionHistory(response);
+        } catch (error) {
+            console.error('Failed to load transaction history:', error);
+            alert('ไม่สามารถโหลดประวัติธุรกรรมได้');
+        }
+    }
+
+    displayTransactionHistory(transactions) {
+        // Create a simple modal to show transaction history
+        const modal = document.createElement('div');
+        modal.className = 'modal active';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>ประวัติธุรกรรม</h3>
+                    <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="transaction-list">
+                        ${transactions.map(tx => `
+                            <div class="transaction-item">
+                                <div class="transaction-info">
+                                    <div class="transaction-type">${this.getTransactionTypeText(tx.type)}</div>
+                                    <div class="transaction-description">${tx.description || ''}</div>
+                                    <div class="transaction-date">${new Date(tx.createdAt).toLocaleString('th-TH')}</div>
+                                </div>
+                                <div class="transaction-amount ${tx.amount >= 0 ? 'positive' : 'negative'}">
+                                    ${tx.amount >= 0 ? '+' : ''}฿${tx.amount.toFixed(2)}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    getTransactionTypeText(type) {
+        const types = {
+            'topup': 'เติมเงิน',
+            'purchase': 'ซื้อบริการ',
+            'refund': 'คืนเงิน',
+            'adjustment': 'ปรับปรุง'
+        };
+        return types[type] || type;
+    }
+
+    // Handle buy service (requires authentication)
+    async handleBuyService(serviceId, serviceName, price) {
+        // Check if user is authenticated
+        if (!this.isAuthenticated) {
+            this.showAuthModal('login');
+            return;
+        }
+
+        // Check if user has sufficient balance
+        if (this.walletBalance < parseFloat(price)) {
+            alert(`เครดิตไม่เพียงพอ — โปรดเติมเงิน\nยอดปัจจุบัน: ฿${this.walletBalance.toFixed(2)}\nต้องการ: ฿${price}`);
+            this.showTopupModal();
+            return;
+        }
+
+        // Confirm purchase
+        const confirmed = confirm(`ต้องการซื้อบริการ ${serviceName}\nราคา ฿${price} หรือไม่?`);
+        if (!confirmed) return;
+
+        try {
+            // Make purchase request
+            const response = await this.makeRequest('/api/purchase', 'POST', {
+                serviceId: serviceId,
+                operatorCode: this.currentOperator,
+                countryCode: this.currentCountry
+            });
+
+            // Update wallet balance
+            this.walletBalance = response.balance;
+            this.updateHeaderAuth();
+
+            // Add to activations display
+            this.addActivation({
+                orderId: response.orderId,
+                serviceId: serviceId,
+                serviceName: serviceName,
+                activationId: response.activationId,
+                phoneNumber: response.phoneNumber,
+                price: response.finalPriceTHB,
+                status: 'active',
+                createdAt: response.createdAt
+            });
+
+            // Show success message
+            alert(`ซื้อสำเร็จ!\nหมายเลข: ${response.phoneNumber}\nID: ${response.activationId}`);
+
+            // Scroll to activations section
+            document.getElementById('activations')?.scrollIntoView({ behavior: 'smooth' });
+
+        } catch (error) {
+            console.error('Purchase failed:', error);
+            
+            if (error.message.includes('INSUFFICIENT_CREDIT')) {
+                alert('เครดิตไม่เพียงพอ — โปรดเติมเงิน');
+                this.showTopupModal();
+            } else {
+                alert(`ไม่สามารถซื้อบริการได้: ${error.message}`);
+            }
+        }
+    }
+
+    // Add activation to the display
+    addActivation(activation) {
+        if (!this.activations) {
+            this.activations = [];
+        }
+        
+        this.activations.unshift(activation);
+        this.updateActivationsDisplay();
+    }
+
+    // Update activations display
+    updateActivationsDisplay() {
+        const container = document.getElementById('activationsContainer');
+        if (!container) return;
+
+        if (this.activations.length === 0) {
+            container.innerHTML = '<div class="no-activations">ยังไม่มีการเปิดใช้งาน</div>';
+            return;
+        }
+
+        container.innerHTML = this.activations.map(activation => `
+            <div class="activation-item" data-activation-id="${activation.activationId}">
+                <div class="activation-header">
+                    <div class="activation-service">${activation.serviceName}</div>
+                    <div class="activation-status status-${activation.status}">${this.getActivationStatusText(activation.status)}</div>
+                </div>
+                <div class="activation-details">
+                    <div class="activation-phone">${activation.phoneNumber}</div>
+                    <div class="activation-id">ID: ${activation.activationId}</div>
+                    <div class="activation-price">฿${activation.price.toFixed(2)}</div>
+                    <div class="activation-time">${new Date(activation.createdAt).toLocaleString('th-TH')}</div>
+                </div>
+                <div class="activation-actions">
+                    <button class="btn btn-outline" onclick="this.checkSMS(${activation.activationId})">
+                        ตรวจสอบ SMS
+                    </button>
+                    <button class="btn btn-danger" onclick="this.cancelActivation(${activation.activationId})">
+                        ยกเลิก
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    getActivationStatusText(status) {
+        const statusTexts = {
+            'active': 'กำลังรอ SMS',
+            'completed': 'สำเร็จ',
+            'cancelled': 'ยกเลิก',
+            'expired': 'หมดอายุ'
+        };
+        return statusTexts[status] || status;
+    }
+
+    // Override makeRequest to include auth headers
+    async makeRequest(url, method = 'GET', data = null) {
+        const options = {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        };
+        
+        if (this.accessToken) {
+            options.headers['Authorization'] = `Bearer ${this.accessToken}`;
+        }
+        
+        if (data) {
+            options.body = JSON.stringify(data);
+        }
+        
+        const response = await fetch(url, options);
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `HTTP ${response.status}`);
+        }
+        
+        return await response.json();
+    }
 }
 
 // Initialize the service when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     window.smsService = new SMSVerificationService();
+    await window.smsService.initAuth();
 });
 
 // Global functions for modal buttons

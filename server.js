@@ -4,19 +4,24 @@ const axios = require('axios');
 const path = require('path');
 const multer = require('multer');
 const cron = require('node-cron');
+const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 
 // Import services
 const Database = require('./server/db/models');
+const DatabaseMigrations = require('./server/db/migrations');
 const WalletService = require('./server/services/walletService');
 const FXService = require('./server/services/fxService');
 const PricingService = require('./server/services/pricingService');
 const ThunderService = require('./server/services/thunderService');
+const AuthService = require('./server/services/authService');
+const AuthMiddleware = require('./server/middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Initialize services
-let db, walletService, fxService, pricingService, thunderService;
+let db, walletService, fxService, pricingService, thunderService, authService, authMiddleware;
 
 // Configure multer for file uploads
 const upload = multer({
@@ -34,10 +39,36 @@ const upload = multer({
     }
 });
 
+// Rate limiting
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // limit each IP to 5 requests per windowMs
+    message: {
+        error: 'TOO_MANY_ATTEMPTS',
+        message: 'พยายามเข้าสู่ระบบมากเกินไป กรุณารอ 15 นาที'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    message: {
+        error: 'TOO_MANY_REQUESTS',
+        message: 'คำขอมากเกินไป กรุณารอสักครู่'
+    }
+});
+
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(cookieParser());
+app.use(generalLimiter);
 
 // Serve static files from the current directory
 app.use(express.static('.'));
@@ -48,10 +79,23 @@ async function initializeServices() {
         db = new Database();
         await db.init();
         
+        // Run database migrations
+        const migrations = new DatabaseMigrations(db);
+        const needsMigration = !(await migrations.checkMigrationStatus());
+        
+        if (needsMigration) {
+            console.log('🔄 Running database migrations...');
+            await migrations.migrateToAuthSystem();
+        } else {
+            console.log('✅ Database is up to date');
+        }
+        
         walletService = new WalletService(db);
         fxService = new FXService(db);
         pricingService = new PricingService(db, fxService);
         thunderService = new ThunderService(db);
+        authService = new AuthService(db);
+        authMiddleware = new AuthMiddleware(db);
         
         console.log('✅ All services initialized successfully');
         
@@ -59,6 +103,8 @@ async function initializeServices() {
         cron.schedule('0 * * * *', async () => {
             await fxService.cleanCache();
             await pricingService.cleanCache();
+            await authService.cleanExpiredSessions();
+            await authService.cleanOldLoginAttempts();
         });
         
     } catch (error) {
@@ -77,11 +123,184 @@ function getSessionId(req) {
 
 // API Routes
 
-// Wallet API
-app.get('/api/wallet/balance', async (req, res) => {
+// Authentication API
+app.post('/api/auth/register', authLimiter, async (req, res) => {
     try {
-        const sessionId = getSessionId(req);
-        const balance = await walletService.getBalance(sessionId);
+        const { email, password } = req.body;
+        
+        if (!email || !password) {
+            return res.status(400).json({ 
+                error: 'VALIDATION_ERROR',
+                message: 'กรุณากรอกอีเมลและรหัสผ่าน'
+            });
+        }
+
+        const result = await authService.register(email, password);
+        
+        if (!result.success) {
+            const statusCode = result.error === 'EMAIL_TAKEN' ? 409 : 400;
+            return res.status(statusCode).json({ 
+                error: result.error,
+                message: result.error === 'EMAIL_TAKEN' ? 'อีเมลนี้ถูกใช้แล้ว' : 
+                        result.error === 'WEAK_PASSWORD' ? 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร' :
+                        result.error === 'INVALID_EMAIL' ? 'รูปแบบอีเมลไม่ถูกต้อง' : 'เกิดข้อผิดพลาด'
+            });
+        }
+
+        // Auto-login after successful registration
+        const loginResult = await authService.login(email, password, req.ip);
+        
+        if (!loginResult.success) {
+            return res.status(500).json({ 
+                error: 'LOGIN_FAILED',
+                message: 'สมัครสมาชิกสำเร็จ แต่ไม่สามารถเข้าสู่ระบบได้'
+            });
+        }
+
+        // Set refresh token as httpOnly cookie
+        res.cookie('refreshToken', loginResult.session.refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
+        res.json({
+            user: loginResult.user,
+            accessToken: loginResult.session.accessToken,
+            message: 'สมัครสมาชิกสำเร็จ — ยินดีต้อนรับ!'
+        });
+
+    } catch (error) {
+        console.error('❌ Registration error:', error);
+        res.status(500).json({ 
+            error: 'INTERNAL_ERROR',
+            message: 'เกิดข้อผิดพลาดภายในระบบ'
+        });
+    }
+});
+
+app.post('/api/auth/login', authLimiter, async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        
+        if (!email || !password) {
+            return res.status(400).json({ 
+                error: 'VALIDATION_ERROR',
+                message: 'กรุณากรอกอีเมลและรหัสผ่าน'
+            });
+        }
+
+        const result = await authService.login(email, password, req.ip);
+        
+        if (!result.success) {
+            const statusCode = result.error === 'ACCOUNT_LOCKED' ? 429 : 
+                             result.error === 'USER_BLOCKED' ? 403 : 401;
+            return res.status(statusCode).json({ 
+                error: result.error,
+                message: result.error === 'INVALID_CREDENTIALS' ? 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' :
+                        result.error === 'USER_BLOCKED' ? 'บัญชีนี้ถูกระงับการใช้งานชั่วคราว' :
+                        result.error === 'ACCOUNT_LOCKED' ? 'บัญชีถูกล็อกชั่วคราว กรุณารอ 15 นาที' : 'เกิดข้อผิดพลาด'
+            });
+        }
+
+        // Set refresh token as httpOnly cookie
+        res.cookie('refreshToken', result.session.refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
+        res.json({
+            user: result.user,
+            accessToken: result.session.accessToken
+        });
+
+    } catch (error) {
+        console.error('❌ Login error:', error);
+        res.status(500).json({ 
+            error: 'INTERNAL_ERROR',
+            message: 'เกิดข้อผิดพลาดภายในระบบ'
+        });
+    }
+});
+
+app.post('/api/auth/logout', async (req, res) => {
+    try {
+        const refreshToken = req.cookies.refreshToken;
+        
+        if (refreshToken) {
+            await authService.logout(refreshToken);
+        }
+
+        // Clear refresh token cookie
+        res.clearCookie('refreshToken', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict'
+        });
+
+        res.json({ message: 'ออกจากระบบสำเร็จ' });
+
+    } catch (error) {
+        console.error('❌ Logout error:', error);
+        res.status(500).json({ 
+            error: 'INTERNAL_ERROR',
+            message: 'เกิดข้อผิดพลาดภายในระบบ'
+        });
+    }
+});
+
+app.post('/api/auth/refresh', async (req, res) => {
+    try {
+        const refreshToken = req.cookies.refreshToken;
+        
+        if (!refreshToken) {
+            return res.status(401).json({ 
+                error: 'MISSING_REFRESH_TOKEN',
+                message: 'ไม่พบ refresh token'
+            });
+        }
+
+        const result = await authService.refreshToken(refreshToken);
+        
+        if (!result.success) {
+            return res.status(401).json({ 
+                error: result.error,
+                message: 'Refresh token ไม่ถูกต้องหรือหมดอายุ'
+            });
+        }
+
+        res.json({
+            accessToken: result.accessToken
+        });
+
+    } catch (error) {
+        console.error('❌ Token refresh error:', error);
+        res.status(500).json({ 
+            error: 'INTERNAL_ERROR',
+            message: 'เกิดข้อผิดพลาดภายในระบบ'
+        });
+    }
+});
+
+app.get('/api/auth/me', authMiddleware.verifyToken, async (req, res) => {
+    try {
+        res.json({ user: req.user });
+    } catch (error) {
+        console.error('❌ Get user error:', error);
+        res.status(500).json({ 
+            error: 'INTERNAL_ERROR',
+            message: 'เกิดข้อผิดพลาดภายในระบบ'
+        });
+    }
+});
+
+// Wallet API
+app.get('/api/wallet/balance', authMiddleware.verifyToken, async (req, res) => {
+    try {
+        const balance = await walletService.getBalance(req.user.id);
         res.json(balance);
     } catch (error) {
         console.error('❌ Wallet balance error:', error);
@@ -89,11 +308,10 @@ app.get('/api/wallet/balance', async (req, res) => {
     }
 });
 
-app.get('/api/wallet/transactions', async (req, res) => {
+app.get('/api/wallet/transactions', authMiddleware.verifyToken, async (req, res) => {
     try {
-        const sessionId = getSessionId(req);
         const limit = parseInt(req.query.limit) || 50;
-        const transactions = await walletService.getTransactionHistory(sessionId, limit);
+        const transactions = await walletService.getTransactionHistory(req.user.id, limit);
         res.json(transactions);
     } catch (error) {
         console.error('❌ Wallet transactions error:', error);
@@ -136,10 +354,9 @@ app.post('/api/pricing/bulk', async (req, res) => {
 });
 
 // Top-up API
-app.post('/api/topup/initiate', async (req, res) => {
+app.post('/api/topup/initiate', authMiddleware.verifyToken, async (req, res) => {
     try {
         const { amountTHB, method } = req.body;
-        const sessionId = getSessionId(req);
         
         if (!amountTHB || amountTHB <= 0 || !method) {
             return res.status(400).json({ error: 'Invalid top-up request' });
@@ -148,8 +365,8 @@ app.post('/api/topup/initiate', async (req, res) => {
         // Create top-up request
         const result = await db.run(`
             INSERT INTO topup_requests (user_id, amount_thb, method, status)
-            SELECT id, ?, ?, 'pending' FROM users WHERE session_id = ?
-        `, [amountTHB, method, sessionId]);
+            VALUES (?, ?, ?, 'pending')
+        `, [req.user.id, amountTHB, method]);
         
         res.json({ topupId: result.id });
     } catch (error) {
@@ -158,10 +375,9 @@ app.post('/api/topup/initiate', async (req, res) => {
     }
 });
 
-app.post('/api/topup/verify/image', upload.single('file'), async (req, res) => {
+app.post('/api/topup/verify/image', authMiddleware.verifyToken, upload.single('file'), async (req, res) => {
     try {
         const { topupId, checkDuplicate = true } = req.body;
-        const sessionId = getSessionId(req);
         
         if (!topupId || !req.file) {
             return res.status(400).json({ error: 'Missing topupId or file' });
@@ -174,21 +390,21 @@ app.post('/api/topup/verify/image', upload.single('file'), async (req, res) => {
         await db.run(`
             UPDATE topup_requests 
             SET status = ?, thunder_response = ?, verification_data = ?, verified_at = ?
-            WHERE id = ? AND user_id = (SELECT id FROM users WHERE session_id = ?)
+            WHERE id = ? AND user_id = ?
         `, [
             verification.success ? 'verified' : 'failed',
             JSON.stringify(verification),
             JSON.stringify(verification.data || verification.error),
             verification.success ? new Date().toISOString() : null,
             topupId,
-            sessionId
+            req.user.id
         ]);
         
         if (verification.success) {
             // Add credit to wallet
             const amount = thunderService.extractAmount(verification.data);
             if (amount && amount.amount > 0) {
-                await walletService.addCredit(sessionId, amount.amount, topupId);
+                await walletService.addCredit(req.user.id, amount.amount, topupId);
             }
         }
         
@@ -205,10 +421,9 @@ app.post('/api/topup/verify/image', upload.single('file'), async (req, res) => {
     }
 });
 
-app.post('/api/topup/verify/payload', async (req, res) => {
+app.post('/api/topup/verify/payload', authMiddleware.verifyToken, async (req, res) => {
     try {
         const { topupId, payload, checkDuplicate = true } = req.body;
-        const sessionId = getSessionId(req);
         
         if (!topupId || !payload) {
             return res.status(400).json({ error: 'Missing topupId or payload' });
@@ -221,21 +436,21 @@ app.post('/api/topup/verify/payload', async (req, res) => {
         await db.run(`
             UPDATE topup_requests 
             SET status = ?, thunder_response = ?, verification_data = ?, verified_at = ?
-            WHERE id = ? AND user_id = (SELECT id FROM users WHERE session_id = ?)
+            WHERE id = ? AND user_id = ?
         `, [
             verification.success ? 'verified' : 'failed',
             JSON.stringify(verification),
             JSON.stringify(verification.data || verification.error),
             verification.success ? new Date().toISOString() : null,
             topupId,
-            sessionId
+            req.user.id
         ]);
         
         if (verification.success) {
             // Add credit to wallet
             const amount = thunderService.extractAmount(verification.data);
             if (amount && amount.amount > 0) {
-                await walletService.addCredit(sessionId, amount.amount, topupId);
+                await walletService.addCredit(req.user.id, amount.amount, topupId);
             }
         }
         
@@ -252,16 +467,15 @@ app.post('/api/topup/verify/payload', async (req, res) => {
     }
 });
 
-app.get('/api/topup/status/:topupId', async (req, res) => {
+app.get('/api/topup/status/:topupId', authMiddleware.verifyToken, async (req, res) => {
     try {
         const { topupId } = req.params;
-        const sessionId = getSessionId(req);
         
         const topup = await db.get(`
             SELECT id, amount_thb, method, status, reason, created_at, verified_at
             FROM topup_requests 
-            WHERE id = ? AND user_id = (SELECT id FROM users WHERE session_id = ?)
-        `, [topupId, sessionId]);
+            WHERE id = ? AND user_id = ?
+        `, [topupId, req.user.id]);
         
         if (!topup) {
             return res.status(404).json({ error: 'Top-up not found' });
@@ -284,10 +498,9 @@ app.get('/api/topup/status/:topupId', async (req, res) => {
 });
 
 // Purchase API
-app.post('/api/purchase', async (req, res) => {
+app.post('/api/purchase', authMiddleware.verifyToken, async (req, res) => {
     try {
         const { serviceId, operatorCode, countryCode } = req.body;
-        const sessionId = getSessionId(req);
         
         if (!serviceId || !operatorCode || !countryCode) {
             return res.status(400).json({ error: 'Missing required parameters' });
@@ -297,7 +510,7 @@ app.post('/api/purchase', async (req, res) => {
         const pricing = await pricingService.calculatePrice(serviceId, countryCode, operatorCode);
         
         // Check if user has sufficient credit
-        const hasCredit = await walletService.hasSufficientCredit(sessionId, pricing.finalTHB);
+        const hasCredit = await walletService.hasSufficientCredit(req.user.id, pricing.finalTHB);
         
         if (!hasCredit) {
             return res.status(400).json({ code: 'INSUFFICIENT_CREDIT' });
@@ -306,16 +519,15 @@ app.post('/api/purchase', async (req, res) => {
         // Create order
         const orderResult = await db.run(`
             INSERT INTO orders (user_id, service_id, operator_code, country_code, final_price_thb, fx_rate, base_vendor_currency, base_vendor_amount, base_thb, markup_thb)
-            SELECT id, ?, ?, ?, ?, ?, ?, ?, ?, ?
-            FROM users WHERE session_id = ?
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
-            serviceId, operatorCode, countryCode, pricing.finalTHB, 
+            req.user.id, serviceId, operatorCode, countryCode, pricing.finalTHB, 
             pricing.fxRate, pricing.vendorCurrency, pricing.baseVendor, 
-            pricing.baseTHB, pricing.markupTHB, sessionId
+            pricing.baseTHB, pricing.markupTHB
         ]);
         
         // Deduct credit
-        const walletResult = await walletService.deductCredit(sessionId, pricing.finalTHB, orderResult.id);
+        const walletResult = await walletService.deductCredit(req.user.id, pricing.finalTHB, orderResult.id);
         
         // Call SMS API to get number
         const smsApiUrl = process.env.SMS_API_URL || 'https://sms-verification-number.com/stubs/handler_api';
@@ -362,7 +574,7 @@ app.post('/api/purchase', async (req, res) => {
             });
         } else {
             // SMS API failed, refund credit
-            await walletService.refundCredit(sessionId, pricing.finalTHB, orderResult.id);
+            await walletService.refundCredit(req.user.id, pricing.finalTHB, orderResult.id);
             await db.run('UPDATE orders SET status = ? WHERE id = ?', ['cancelled', orderResult.id]);
             
             res.status(400).json({ error: `SMS API error: ${smsResult}` });

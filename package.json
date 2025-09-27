@@ -1,23 +1,21 @@
 {
-  "name": "sms-verification-proxy",
+  "name": "sms-verification-business",
   "version": "1.0.0",
-  "description": "CORS proxy for SMS verification API",
+  "description": "SMS Verification Service with Wallet and Business Logic",
   "main": "server.js",
   "scripts": {
-    "start": "node server/server.js",
-    "dev": "node server/server.js",
-    "install-deps": "npm install"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "axios": "^1.6.0",
     "multer": "^1.4.5-lts.1",
-    "better-sqlite3": "^9.2.2",
-    "dotenv": "^16.3.1",
-    "form-data": "^4.0.0"
+    "sqlite3": "^5.1.6",
+    "node-cron": "^3.0.3"
   },
-  "keywords": ["sms", "verification", "proxy", "cors"],
+  "keywords": ["sms", "verification", "wallet", "business", "thunder-api"],
   "author": "",
   "license": "MIT"
 }

@@ -7,6 +7,24 @@ class PricingService {
         this.cacheTimeout = 300000; // 5 minutes
     }
 
+    // Get pricing for a service (main method)
+    async getPricing(serviceId, countryCode, operatorCode) {
+        try {
+            const pricing = await this.calculatePrice(serviceId, countryCode, operatorCode);
+            return {
+                success: true,
+                ...pricing
+            };
+        } catch (error) {
+            console.error('❌ getPricing error:', error);
+            return {
+                success: false,
+                error: 'PRICING_ERROR',
+                message: error.message
+            };
+        }
+    }
+
     // Calculate final price for a service
     async calculatePrice(serviceId, countryCode, operatorCode) {
         try {

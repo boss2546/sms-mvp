@@ -15,6 +15,7 @@ const FXService = require('./server/services/fxService');
 const PricingService = require('./server/services/pricingService');
 const ThunderService = require('./server/services/thunderService');
 const MockThunderService = require('./server/services/mockThunderService');
+const SMSVerificationService = require('./server/services/smsVerificationService');
 const AuthService = require('./server/services/authService');
 const AuthMiddleware = require('./server/middleware/auth');
 
@@ -22,7 +23,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Initialize services
-let db, walletService, fxService, pricingService, thunderService, authService, authMiddleware;
+let db, walletService, fxService, pricingService, thunderService, smsVerificationService, authService, authMiddleware;
 
 // Configure multer for file uploads
 const upload = multer({
@@ -88,6 +89,7 @@ async function initializeServices() {
         walletService = new WalletService(db);
         fxService = new FXService(db);
         pricingService = new PricingService(db, fxService);
+        smsVerificationService = new SMSVerificationService(db);
         
         // Initialize Thunder Service with API status check
         try {
@@ -493,92 +495,631 @@ function setupRoutes() {
     // Purchase endpoint (require authentication)
     app.post('/api/purchase', authMiddleware.verifyToken, async (req, res) => {
         try {
+            console.log('🛒 Purchase request:', req.body);
+            console.log('👤 User:', req.user);
+            
             const { serviceId, countryCode, operatorCode } = req.body;
             
             if (!serviceId || !countryCode || !operatorCode) {
+                console.log('❌ Missing required fields');
                 return res.status(400).json({ 
                     error: 'VALIDATION_ERROR',
                     message: 'ข้อมูลไม่ครบถ้วน' 
                 });
             }
 
+            console.log('💰 Getting pricing for service:', serviceId, countryCode, operatorCode);
             // Get pricing
             const pricing = await pricingService.getPricing(serviceId, countryCode, operatorCode);
+            console.log('💰 Pricing result:', pricing);
             
             if (!pricing.success) {
+                console.log('❌ Pricing failed:', pricing.error);
                 return res.status(400).json({ 
                     error: pricing.error,
                     message: pricing.message 
                 });
             }
 
+            console.log('💳 Checking credit for user:', req.user.id, 'amount:', pricing.finalTHB);
             // Check if user has sufficient credit
             const hasCredit = await walletService.hasSufficientCredit(req.user.id, pricing.finalTHB);
+            console.log('💳 Credit check result:', hasCredit);
             
             if (!hasCredit) {
+                console.log('❌ Insufficient credit');
                 return res.status(400).json({ 
                     error: 'INSUFFICIENT_CREDIT',
                     message: 'เครดิตไม่เพียงพอ — โปรดเติมเงิน' 
                 });
             }
 
+            console.log('💸 Deducting credit...');
             // Deduct credit
-            const deductResult = await walletService.deductCredit(req.user.id, pricing.finalTHB, 'purchase', `SMS-${serviceId}-${countryCode}-${operatorCode}`);
+            const deductResult = await walletService.deductCredit(req.user.id, pricing.finalTHB, `SMS-${serviceId}-${countryCode}-${operatorCode}`);
+            console.log('💸 Deduct result:', deductResult);
             
-            if (!deductResult.success) {
+            if (!deductResult || !deductResult.transactionId) {
+                console.log('❌ Credit deduction failed:', deductResult?.error || 'Unknown error');
                 return res.status(400).json({ 
-                    error: deductResult.error,
-                    message: deductResult.message 
+                    error: deductResult?.error || 'CREDIT_DEDUCTION_FAILED',
+                    message: deductResult?.message || 'ไม่สามารถหักเงินได้'
                 });
             }
 
+            console.log('📝 Creating order...');
             // Create order
             const orderResult = await db.run(`
-                INSERT INTO orders (user_id, service_id, country_code, operator_code, base_vendor, fx_rate, base_thb, markup_thb, final_thb, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)
+                INSERT INTO orders (user_id, service_id, country_code, operator_code, base_vendor_amount, fx_rate, base_thb, markup_thb, final_price_thb, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)
             `, [req.user.id, serviceId, countryCode, operatorCode, pricing.baseVendor, pricing.fxRate, pricing.baseTHB, pricing.markupTHB, pricing.finalTHB]);
 
-            const orderId = orderResult.lastID;
+            console.log('📝 Order result object:', JSON.stringify(orderResult, null, 2));
+            const orderId = orderResult.lastInsertRowid;
+            console.log('📝 Order created:', orderId);
+            console.log('📝 Order result type:', typeof orderResult);
+            console.log('📝 Order result keys:', Object.keys(orderResult));
 
-            // Call Thunder API
-            const thunderResult = await thunderService.purchaseNumber(serviceId, countryCode, operatorCode);
+            // Validate orderId
+            if (!orderId) {
+                console.error('❌ Failed to create order - orderId is null/undefined');
+                // Refund credit
+                await walletService.addCredit(req.user.id, pricing.finalTHB, 'refund', `Refund for failed order creation`);
+                
+                return res.status(500).json({
+                    error: 'ORDER_CREATION_FAILED',
+                    message: 'ไม่สามารถสร้างคำสั่งซื้อได้ กรุณาลองใหม่'
+                });
+            }
+
+            console.log('💰 Getting current services and costs from SMS API...');
+            // Get current services and costs first
+            const servicesResult = await smsVerificationService.getServicesAndCost(countryCode, operatorCode, serviceId);
+            console.log('💰 Current services:', servicesResult);
             
-            if (thunderResult.success) {
+            if (!servicesResult.success) {
+                console.log('❌ Failed to get current services:', servicesResult.error);
+                // Refund credit
+                await walletService.addCredit(req.user.id, pricing.finalTHB, 'refund', `Refund for failed service check ${orderId}`);
+                
                 // Update order status
                 await db.run(`
-                    UPDATE orders SET status = 'active', thunder_order_id = ?, updated_at = CURRENT_TIMESTAMP
+                    UPDATE orders SET status = 'cancelled'
                     WHERE id = ?
-                `, [thunderResult.orderId, orderId]);
+                `, [orderId]);
+
+                return res.status(400).json({
+                    error: 'SERVICE_CHECK_FAILED',
+                    message: servicesResult.message
+                });
+            }
+
+            // Check if no services are available
+            if (servicesResult.services === 'NO_SERVICES' || !servicesResult.services || servicesResult.services.length === 0) {
+                console.log('❌ No services available in this country');
+                // Refund credit
+                await walletService.addCredit(req.user.id, pricing.finalTHB, 'refund', `Refund for no services ${orderId}`);
+                
+                // Update order status
+                await db.run(`
+                    UPDATE orders SET status = 'cancelled'
+                    WHERE id = ?
+                `, [orderId]);
+
+                return res.status(400).json({
+                    error: 'NO_SERVICES',
+                    message: 'ไม่มีบริการใดๆ ที่พร้อมใช้งานในประเทศนี้',
+                    suggestions: [
+                        'เปลี่ยนประเทศ',
+                        'ลองใหม่ภายหลัง',
+                        'ติดต่อเจ้าหน้าที่'
+                    ]
+                });
+            }
+
+            // Check if service is available and get current price
+            const currentService = findServiceInResponse(servicesResult.services, serviceId);
+            if (!currentService) {
+                console.log('❌ Service not found in current services');
+                // Refund credit
+                await walletService.addCredit(req.user.id, pricing.finalTHB, 'refund', `Refund for service not found ${orderId}`);
+                
+                // Update order status
+                await db.run(`
+                    UPDATE orders SET status = 'cancelled'
+                    WHERE id = ?
+                `, [orderId]);
+
+                return res.status(400).json({
+                    error: 'SERVICE_NOT_FOUND',
+                    message: `ไม่พบบริการ ${serviceId} ในระบบ`,
+                    suggestions: [
+                        'ลองเลือกบริการอื่น',
+                        'รีเฟรชหน้าจอ',
+                        'ติดต่อเจ้าหน้าที่'
+                    ]
+                });
+            }
+
+            // Check if service has available numbers
+            if (currentService.quantity === 0 || currentService.quantity === '0') {
+                console.log('❌ No numbers available for service:', currentService);
+                // Refund credit
+                await walletService.addCredit(req.user.id, pricing.finalTHB, 'refund', `Refund for no numbers ${orderId}`);
+                
+                // Update order status
+                await db.run(`
+                    UPDATE orders SET status = 'cancelled'
+                    WHERE id = ?
+                `, [orderId]);
+
+                return res.status(400).json({
+                    error: 'NO_NUMBERS',
+                    message: `ไม่มีหมายเลขว่างสำหรับบริการ ${serviceId} ในประเทศ/ผู้ให้บริการที่เลือก`,
+                    suggestions: [
+                        'ลองเลือกประเทศอื่น',
+                        'ลองเลือกผู้ให้บริการอื่น', 
+                        'รอสักครู่แล้วลองใหม่'
+                    ]
+                });
+            }
+
+            // Check if price has changed significantly (more than 10%)
+            const currentPrice = parseFloat(currentService.price);
+            if (currentPrice && Math.abs(currentPrice - pricing.baseVendor) / pricing.baseVendor > 0.1) {
+                console.log('⚠️ Price has changed significantly:', {
+                    old: pricing.baseVendor,
+                    new: currentPrice,
+                    change: ((currentPrice - pricing.baseVendor) / pricing.baseVendor * 100).toFixed(1) + '%'
+                });
+                
+                // Refund credit
+                await walletService.addCredit(req.user.id, pricing.finalTHB, 'refund', `Refund for price change ${orderId}`);
+                
+                // Update order status
+                await db.run(`
+                    UPDATE orders SET status = 'cancelled'
+                    WHERE id = ?
+                `, [orderId]);
+
+                return res.status(400).json({
+                    error: 'PRICE_CHANGED',
+                    message: `ราคาเปลี่ยนแปลง ${((currentPrice - pricing.baseVendor) / pricing.baseVendor * 100).toFixed(1)}% กรุณาลองใหม่`,
+                    oldPrice: pricing.finalTHB,
+                    newPrice: currentPrice * pricing.fxRate + pricing.markupTHB
+                });
+            }
+
+            console.log('✅ Service is available with current price:', {
+                service: currentService.id,
+                name: currentService.name,
+                price: currentService.price,
+                quantity: currentService.quantity
+            });
+
+            console.log('📱 Calling SMS Verification API...');
+            // Call SMS Verification API with correct parameters
+            const smsResult = await smsVerificationService.getNumber(serviceId, operatorCode, countryCode);
+            console.log('📱 SMS API result:', smsResult);
+            
+            if (smsResult.success) {
+                console.log('✅ SMS API success, updating order...');
+                // Update order status
+                await db.run(`
+                    UPDATE orders SET status = 'active'
+                    WHERE id = ?
+                `, [orderId]);
+
+                // Update order with phone number
+                await db.run(`
+                    UPDATE orders SET phone_number = ?
+                    WHERE id = ?
+                `, [smsResult.phoneNumber, orderId]);
 
                 // Create activation record
-                await db.run(`
-                    INSERT INTO activations (user_id, order_id, service_id, country_code, operator_code, phone_number, status, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)
-                `, [req.user.id, orderId, serviceId, countryCode, operatorCode, thunderResult.phoneNumber]);
+                console.log('📱 Creating activation record with orderId:', orderId, 'thunderOrderId:', smsResult.activationId);
+                
+                const activationResult = await db.run(`
+                    INSERT INTO activations (user_id, order_id, service_id, country_code, operator_code, phone_number, status, thunder_order_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, 'active', ?, CURRENT_TIMESTAMP)
+                `, [req.user.id, orderId, serviceId, countryCode, operatorCode, smsResult.phoneNumber, smsResult.activationId]);
+
+                const activationId = activationResult.lastInsertRowid;
+                console.log('✅ Activation created:', activationId);
+
+                // Validate activationId
+                if (!activationId) {
+                    console.error('❌ Failed to create activation - activationId is null/undefined');
+                    // Update order status to failed
+                    await db.run(`
+                        UPDATE orders SET status = 'failed'
+                        WHERE id = ?
+                    `, [orderId]);
+                    
+                    // Refund credit
+                    await walletService.addCredit(req.user.id, pricing.finalTHB, 'refund', `Refund for failed activation creation ${orderId}`);
+                    
+                    return res.status(500).json({
+                        error: 'ACTIVATION_CREATION_FAILED',
+                        message: 'ไม่สามารถสร้างการใช้งานได้ กรุณาลองใหม่'
+                    });
+                }
+
+                // Get updated balance
+                const balance = await walletService.getBalance(req.user.id);
+                console.log('💰 Final balance:', balance);
 
                 res.json({
                     success: true,
                     orderId: orderId,
-                    phoneNumber: thunderResult.phoneNumber,
+                    activationId: activationId,
+                    phoneNumber: smsResult.phoneNumber,
+                    finalPriceTHB: pricing.finalTHB,
+                    balance: balance.balance,
+                    createdAt: new Date().toISOString(),
                     message: 'ซื้อบริการสำเร็จ'
                 });
             } else {
+                console.log('❌ SMS API failed, refunding credit...');
                 // Refund credit on failure
                 await walletService.refundCredit(req.user.id, pricing.finalTHB, 'refund', `REFUND-${orderId}`);
                 
                 // Update order status
                 await db.run(`
-                    UPDATE orders SET status = 'failed', error_message = ?, updated_at = CURRENT_TIMESTAMP
+                    UPDATE orders SET status = 'cancelled'
                     WHERE id = ?
-                `, [thunderResult.message, orderId]);
+                `, [orderId]);
 
                 res.status(400).json({ 
                     error: 'PURCHASE_FAILED',
-                    message: thunderResult.message 
+                    message: smsResult.message 
                 });
             }
         } catch (error) {
             console.error('❌ Purchase error:', error);
+            console.error('❌ Error stack:', error.stack);
+            res.status(500).json({ 
+                error: 'INTERNAL_ERROR',
+                message: `เกิดข้อผิดพลาดภายในระบบ: ${error.message}`
+            });
+        }
+    });
+
+    // Helper function to extract price from SMS API response
+    function extractPriceFromResponse(pricesData, serviceId) {
+        try {
+            // Parse the prices data structure
+            // Format: {"Country_Code":{"Service_Code":{"cost":Cost,"count":Quantity}}}
+            if (typeof pricesData === 'object' && pricesData !== null) {
+                for (const countryCode in pricesData) {
+                    const countryData = pricesData[countryCode];
+                    if (typeof countryData === 'object' && countryData !== null) {
+                        for (const serviceCode in countryData) {
+                            if (serviceCode === serviceId) {
+                                const serviceData = countryData[serviceCode];
+                                if (serviceData && typeof serviceData.cost === 'number') {
+                                    return serviceData.cost;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return null;
+        } catch (error) {
+            console.error('❌ Error extracting price from response:', error);
+            return null;
+        }
+    }
+
+    // Helper function to find service in getServicesAndCost response
+    function findServiceInResponse(servicesData, serviceId) {
+        try {
+            // Parse the services data structure
+            // Format: [{"id":"vk","name":"Вконтакте","price":29.88,"quantity":"19"}]
+            if (Array.isArray(servicesData)) {
+                return servicesData.find(service => service.id === serviceId);
+            }
+            return null;
+        } catch (error) {
+            console.error('❌ Error finding service in response:', error);
+            return null;
+        }
+    }
+
+    // Get activation status from SMS API
+    app.get('/api/activation/:id/status', authMiddleware.verifyToken, async (req, res) => {
+        try {
+            const { id } = req.params;
+            const userId = req.user.id;
+
+            // Get activation from database
+            const activation = await db.get(`
+                SELECT a.*, a.thunder_order_id, o.created_at as order_created_at
+                FROM activations a 
+                LEFT JOIN orders o ON a.order_id = o.id
+                WHERE a.id = ? AND a.user_id = ?
+            `, [id, userId]);
+
+            if (!activation) {
+                return res.status(404).json({
+                    error: 'ACTIVATION_NOT_FOUND',
+                    message: 'ไม่พบการใช้งาน'
+                });
+            }
+
+            // Check if activation has expired (20 minutes from activation creation - when number was received)
+            const activationTime = new Date(activation.created_at).getTime();
+            const now = new Date().getTime();
+            const timeLimit = 20 * 60 * 1000; // 20 minutes in milliseconds
+            
+            if (now - activationTime > timeLimit) {
+                // Activation expired, cancel it
+                await db.run(`
+                    UPDATE activations SET status = 'expired'
+                    WHERE id = ?
+                `, [id]);
+                
+                await db.run(`
+                    UPDATE orders SET status = 'expired'
+                    WHERE id = ?
+                `, [activation.order_id]);
+
+                return res.json({
+                    success: true,
+                    status: 'expired',
+                    message: 'หมายเลขหมดเวลาแล้ว (20 นาทีหลังได้รับหมายเลข)',
+                    expired: true
+                });
+            }
+
+            // Check status with SMS API
+            const statusResult = await smsVerificationService.getStatus(activation.thunder_order_id);
+            
+            if (statusResult.success) {
+                // Update local status
+                await db.run(`
+                    UPDATE activations SET status = ?
+                    WHERE id = ?
+                `, [statusResult.status, id]);
+
+                res.json({
+                    success: true,
+                    status: statusResult.status,
+                    message: statusResult.message,
+                    smsCode: statusResult.smsCode
+                });
+            } else {
+                res.status(400).json({
+                    error: statusResult.error,
+                    message: statusResult.message
+                });
+            }
+        } catch (error) {
+            console.error('❌ Get activation status error:', error);
+            res.status(500).json({
+                error: 'INTERNAL_ERROR',
+                message: 'เกิดข้อผิดพลาดในการตรวจสอบสถานะ'
+            });
+        }
+    });
+
+    // Request another SMS (status code 3)
+    app.post('/api/activation/:id/request-sms', authMiddleware.verifyToken, async (req, res) => {
+        try {
+            const { id } = req.params;
+            const userId = req.user.id;
+
+            // Get activation from database
+            const activation = await db.get(`
+                SELECT a.*, a.thunder_order_id 
+                FROM activations a 
+                WHERE a.id = ? AND a.user_id = ?
+            `, [id, userId]);
+
+            if (!activation) {
+                return res.status(404).json({
+                    error: 'ACTIVATION_NOT_FOUND',
+                    message: 'ไม่พบการใช้งาน'
+                });
+            }
+
+            // Request another SMS with SMS API (status code 3)
+            const requestResult = await smsVerificationService.setStatus(activation.thunder_order_id, 3);
+            
+            if (requestResult.success) {
+                // Update local status to waiting
+                await db.run(`
+                    UPDATE activations SET status = 'waiting', updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                `, [id]);
+
+                res.json({
+                    success: true,
+                    message: 'ขอ SMS อีกสำเร็จ'
+                });
+            } else {
+                res.status(400).json({
+                    error: requestResult.error,
+                    message: requestResult.message
+                });
+            }
+        } catch (error) {
+            console.error('❌ Request SMS error:', error);
+            res.status(500).json({
+                error: 'INTERNAL_ERROR',
+                message: 'เกิดข้อผิดพลาดในการขอ SMS อีก'
+            });
+        }
+    });
+
+    // Cancel activation
+    app.post('/api/activation/:id/cancel', authMiddleware.verifyToken, async (req, res) => {
+        try {
+            const { id } = req.params;
+            const userId = req.user.id;
+
+            // Get activation from database
+            const activation = await db.get(`
+                SELECT a.*, a.thunder_order_id 
+                FROM activations a 
+                WHERE a.id = ? AND a.user_id = ?
+            `, [id, userId]);
+
+            if (!activation) {
+                return res.status(404).json({
+                    error: 'ACTIVATION_NOT_FOUND',
+                    message: 'ไม่พบการใช้งาน'
+                });
+            }
+
+            // Cancel with SMS API
+            const cancelResult = await smsVerificationService.setStatus(activation.thunder_order_id, 8);
+            
+            if (cancelResult.success) {
+                // Update local status
+                await db.run(`
+                    UPDATE activations SET status = 'cancelled'
+                    WHERE id = ?
+                `, [id]);
+
+                res.json({
+                    success: true,
+                    message: 'ยกเลิกการใช้งานเรียบร้อย'
+                });
+            } else {
+                res.status(400).json({
+                    error: cancelResult.error,
+                    message: cancelResult.message
+                });
+            }
+        } catch (error) {
+            console.error('❌ Cancel activation error:', error);
+            res.status(500).json({
+                error: 'INTERNAL_ERROR',
+                message: 'เกิดข้อผิดพลาดในการยกเลิก'
+            });
+        }
+    });
+
+    // Activation status endpoint
+    app.get('/api/activations/:activationId/status', authMiddleware.verifyToken, async (req, res) => {
+        try {
+            const { activationId } = req.params;
+            
+            const activation = await db.get(`
+                SELECT a.*, o.status as order_status
+                FROM activations a
+                LEFT JOIN orders o ON a.order_id = o.id
+                WHERE a.id = ? AND a.user_id = ?
+            `, [activationId, req.user.id]);
+            
+            if (!activation) {
+                return res.status(404).json({ 
+                    error: 'ACTIVATION_NOT_FOUND',
+                    message: 'ไม่พบการใช้งาน' 
+                });
+            }
+            
+            res.json({
+                status: activation.status,
+                smsCode: activation.received_sms || null,
+                phoneNumber: activation.phone_number,
+                createdAt: activation.created_at
+            });
+        } catch (error) {
+            console.error('❌ Get activation status error:', error);
+            res.status(500).json({ 
+                error: 'INTERNAL_ERROR',
+                message: 'เกิดข้อผิดพลาดภายในระบบ'
+            });
+        }
+    });
+
+    // Cancel activation endpoint
+    app.post('/api/activations/:activationId/cancel', authMiddleware.verifyToken, async (req, res) => {
+        try {
+            const { activationId } = req.params;
+            
+            const activation = await db.get(`
+                SELECT a.*, o.final_thb
+                FROM activations a
+                LEFT JOIN orders o ON a.order_id = o.id
+                WHERE a.id = ? AND a.user_id = ?
+            `, [activationId, req.user.id]);
+            
+            if (!activation) {
+                return res.status(404).json({ 
+                    error: 'ACTIVATION_NOT_FOUND',
+                    message: 'ไม่พบการใช้งาน' 
+                });
+            }
+            
+            if (activation.status === 'cancelled') {
+                return res.status(400).json({ 
+                    error: 'ALREADY_CANCELLED',
+                    message: 'การใช้งานถูกยกเลิกไปแล้ว' 
+                });
+            }
+            
+            // Update activation status
+            await db.run(`
+                UPDATE activations SET status = 'cancelled'
+                WHERE id = ?
+            `, [activationId]);
+            
+            // Update order status
+            await db.run(`
+                UPDATE orders SET status = 'cancelled'
+                WHERE id = ?
+            `, [activation.order_id]);
+            
+            // Refund credit if applicable
+            if (activation.final_thb > 0) {
+                await walletService.refundCredit(req.user.id, activation.final_thb, 'refund', `CANCEL-${activationId}`);
+            }
+            
+            res.json({
+                success: true,
+                message: 'ยกเลิกการใช้งานสำเร็จ'
+            });
+        } catch (error) {
+            console.error('❌ Cancel activation error:', error);
+            res.status(500).json({ 
+                error: 'INTERNAL_ERROR',
+                message: 'เกิดข้อผิดพลาดภายในระบบ'
+            });
+        }
+    });
+
+    // Get user's activations endpoint
+    app.get('/api/activations', authMiddleware.verifyToken, async (req, res) => {
+        try {
+            const activations = await db.all(`
+                SELECT 
+                    a.id as activationId,
+                    a.order_id as orderId,
+                    a.service_id as serviceId,
+                    a.country_code as countryCode,
+                    a.operator_code as operatorCode,
+                    a.phone_number as phoneNumber,
+                    a.received_sms as receivedSms,
+                    a.status,
+                    a.thunder_order_id as thunderOrderId,
+                    a.created_at as createdAt,
+                    a.updated_at as updatedAt,
+                    o.final_price_thb as finalPriceTHB,
+                    COALESCE(s.name, a.service_id) as serviceName
+                FROM activations a
+                LEFT JOIN orders o ON a.order_id = o.id
+                LEFT JOIN services s ON a.service_id = s.id
+                WHERE a.user_id = ?
+                ORDER BY a.created_at DESC
+            `, [req.user.id]);
+            
+            res.json({ activations });
+        } catch (error) {
+            console.error('❌ Get activations error:', error);
             res.status(500).json({ 
                 error: 'INTERNAL_ERROR',
                 message: 'เกิดข้อผิดพลาดภายในระบบ'
@@ -896,7 +1437,7 @@ function setupRoutes() {
                         
                         await db.run(`
                             UPDATE activations 
-                            SET status = ?, updated_at = CURRENT_TIMESTAMP
+                            SET status = ?
                             WHERE id = ?
                         `, [newStatus, id]);
                         

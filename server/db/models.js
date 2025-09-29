@@ -98,9 +98,8 @@ class Database {
                 base_vendor_amount REAL,
                 base_thb REAL,
                 markup_thb REAL DEFAULT 10.00,
-                activation_id INTEGER,
                 phone_number TEXT,
-                status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'cancelled', 'expired')),
+                status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'cancelled', 'expired', 'failed')),
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 completed_at DATETIME,
                 FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
@@ -168,7 +167,7 @@ class Database {
                 operator_code TEXT NOT NULL,
                 phone_number TEXT,
                 received_sms TEXT,
-                status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'completed', 'cancelled', 'expired')),
+                status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'completed', 'cancelled', 'expired', 'waiting')),
                 thunder_order_id TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -281,7 +280,11 @@ class Database {
                     console.error('❌ Database run error:', err);
                     reject(err);
                 } else {
-                    resolve({ id: this.lastID, changes: this.changes });
+                    resolve({ 
+                        id: this.lastID, 
+                        lastInsertRowid: this.lastID,
+                        changes: this.changes 
+                    });
                 }
             });
         });

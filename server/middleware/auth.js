@@ -2,11 +2,25 @@ const AuthService = require('../services/authService');
 
 class AuthMiddleware {
     constructor(db) {
-        this.authService = new AuthService(db);
+        this.db = db;
+        this.authService = null;
+        
+        // Bind methods to preserve context
+        this.verifyToken = this.verifyToken.bind(this);
+        this.verifyRefreshToken = this.verifyRefreshToken.bind(this);
+        this.optionalAuth = this.optionalAuth.bind(this);
+    }
+
+    // Initialize authService when needed
+    getAuthService() {
+        if (!this.authService) {
+            this.authService = new AuthService(this.db);
+        }
+        return this.authService;
     }
 
     // Middleware to verify JWT token
-    verifyToken = async (req, res, next) => {
+    async verifyToken(req, res, next) {
         try {
             const authHeader = req.headers.authorization;
             
@@ -18,7 +32,8 @@ class AuthMiddleware {
             }
 
             const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-            const decoded = this.authService.verifyAccessToken(token);
+            const authService = this.getAuthService();
+            const decoded = authService.verifyAccessToken(token);
 
             if (!decoded) {
                 return res.status(401).json({ 
@@ -28,7 +43,7 @@ class AuthMiddleware {
             }
 
             // Get user data
-            const userResult = await this.authService.getUserById(decoded.userId);
+            const userResult = await authService.getUserById(decoded.userId);
             if (!userResult.success) {
                 return res.status(401).json({ 
                     error: 'USER_NOT_FOUND',
@@ -55,10 +70,10 @@ class AuthMiddleware {
                 message: 'เกิดข้อผิดพลาดภายในระบบ'
             });
         }
-    };
+    }
 
     // Middleware to verify admin role
-    requireAdmin = (req, res, next) => {
+    requireAdmin(req, res, next) {
         if (!req.user || req.user.role !== 'admin') {
             return res.status(403).json({ 
                 error: 'FORBIDDEN',
@@ -66,10 +81,10 @@ class AuthMiddleware {
             });
         }
         next();
-    };
+    }
 
     // Middleware to get user from refresh token (for token refresh endpoint)
-    verifyRefreshToken = async (req, res, next) => {
+    async verifyRefreshToken(req, res, next) {
         try {
             const { refreshToken } = req.body;
             
@@ -81,7 +96,8 @@ class AuthMiddleware {
             }
 
             // Verify refresh token exists and is valid
-            const session = await this.authService.db.get(`
+            const authService = this.getAuthService();
+            const session = await authService.db.get(`
                 SELECT s.*, u.id, u.email, u.role, u.status
                 FROM user_sessions s
                 JOIN users u ON s.user_id = u.id
@@ -119,10 +135,10 @@ class AuthMiddleware {
                 message: 'เกิดข้อผิดพลาดภายในระบบ'
             });
         }
-    };
+    }
 
     // Optional authentication - doesn't fail if no token
-    optionalAuth = async (req, res, next) => {
+    async optionalAuth(req, res, next) {
         try {
             const authHeader = req.headers.authorization;
             
@@ -132,14 +148,15 @@ class AuthMiddleware {
             }
 
             const token = authHeader.substring(7);
-            const decoded = this.authService.verifyAccessToken(token);
+            const authService = this.getAuthService();
+            const decoded = authService.verifyAccessToken(token);
 
             if (!decoded) {
                 req.user = null;
                 return next();
             }
 
-            const userResult = await this.authService.getUserById(decoded.userId);
+            const userResult = await authService.getUserById(decoded.userId);
             if (userResult.success && userResult.user.status !== 'blocked') {
                 req.user = userResult.user;
             } else {
@@ -153,7 +170,7 @@ class AuthMiddleware {
             req.user = null;
             next();
         }
-    };
+    }
 }
 
 module.exports = AuthMiddleware;

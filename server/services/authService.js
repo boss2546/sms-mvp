@@ -8,8 +8,7 @@ class AuthService {
         this.JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
         this.JWT_EXPIRES_IN = '15m'; // 15 minutes
         this.REFRESH_TOKEN_EXPIRES_IN = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
-        this.MAX_LOGIN_ATTEMPTS = 5;
-        this.LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
+        // Rate limiting removed
     }
 
     // Generate secure random token
@@ -102,6 +101,16 @@ class AuthService {
                 [userId]
             );
 
+            // Generate access token and refresh token
+            const accessToken = this.generateAccessToken(user);
+            const refreshToken = this.generateRefreshToken();
+
+            // Create session
+            await this.db.run(`
+                INSERT INTO user_sessions (user_id, refresh_token, expires_at, created_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            `, [userId, refreshToken, new Date(Date.now() + this.REFRESH_TOKEN_EXPIRES_IN).toISOString()]);
+
             return {
                 success: true,
                 user: {
@@ -110,7 +119,9 @@ class AuthService {
                     role: user.role,
                     status: user.status,
                     createdAt: user.created_at
-                }
+                },
+                accessToken,
+                refreshToken
             };
 
         } catch (error) {
@@ -125,12 +136,6 @@ class AuthService {
     // Login user
     async login(email, password, ipAddress) {
         try {
-            // Check for recent failed attempts
-            const recentAttempts = await this.getRecentFailedAttempts(email, ipAddress);
-            if (recentAttempts >= this.MAX_LOGIN_ATTEMPTS) {
-                throw new Error('ACCOUNT_LOCKED');
-            }
-
             // Get user by email
             const user = await this.db.get(
                 'SELECT id, email, password_hash, status, role FROM users WHERE email = ?',
@@ -138,7 +143,6 @@ class AuthService {
             );
 
             if (!user) {
-                await this.recordLoginAttempt(email, ipAddress, false);
                 throw new Error('INVALID_CREDENTIALS');
             }
 
@@ -150,12 +154,8 @@ class AuthService {
             // Verify password
             const isValidPassword = await this.verifyPassword(password, user.password_hash);
             if (!isValidPassword) {
-                await this.recordLoginAttempt(email, ipAddress, false);
                 throw new Error('INVALID_CREDENTIALS');
             }
-
-            // Record successful login
-            await this.recordLoginAttempt(email, ipAddress, true);
 
             // Update last login
             await this.db.run(
@@ -288,37 +288,7 @@ class AuthService {
         }
     }
 
-    // Record login attempt
-    async recordLoginAttempt(email, ipAddress, success) {
-        try {
-            await this.db.run(`
-                INSERT INTO login_attempts (email, ip_address, success)
-                VALUES (?, ?, ?)
-            `, [email.toLowerCase(), ipAddress, success]);
-        } catch (error) {
-            console.error('Record login attempt error:', error);
-        }
-    }
-
-    // Get recent failed attempts
-    async getRecentFailedAttempts(email, ipAddress) {
-        try {
-            const cutoffTime = new Date(Date.now() - this.LOCKOUT_DURATION).toISOString();
-            
-            const result = await this.db.get(`
-                SELECT COUNT(*) as count
-                FROM login_attempts
-                WHERE (email = ? OR ip_address = ?) 
-                AND success = 0 
-                AND created_at > ?
-            `, [email.toLowerCase(), ipAddress, cutoffTime]);
-
-            return result.count || 0;
-        } catch (error) {
-            console.error('Get recent failed attempts error:', error);
-            return 0;
-        }
-    }
+    // Login attempts tracking removed
 
     // Clean expired sessions
     async cleanExpiredSessions() {
@@ -332,18 +302,9 @@ class AuthService {
         }
     }
 
-    // Clean old login attempts
-    async cleanOldLoginAttempts() {
-        try {
-            const cutoffTime = new Date(Date.now() - (24 * 60 * 60 * 1000)).toISOString(); // 24 hours ago
-            await this.db.run(
-                'DELETE FROM login_attempts WHERE created_at < ?',
-                [cutoffTime]
-            );
-        } catch (error) {
-            console.error('Clean old login attempts error:', error);
-        }
-    }
+    // Clean old login attempts removed
 }
 
 module.exports = AuthService;
+
+

@@ -237,17 +237,16 @@ class SMSVerificationService {
             this.filterServices(e.target.value);
         });
 
-        // Wallet events
-        document.getElementById('topupBtn').addEventListener('click', () => {
-            this.showTopupModal();
+        // QR Payment events (replaces old topup system)
+        document.getElementById('qrPaymentBtn').addEventListener('click', () => {
+            if (!this.isAuthenticated) {
+                this.showAuthModal('login');
+            } else {
+                this.showQRPaymentModal();
+            }
         });
 
-        // Top-up modal events
-        document.querySelectorAll('input[name="topupMethod"]').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                this.handleTopupMethodChange(e.target.value);
-            });
-        });
+        // Old topup system removed - using QR payment only
 
         // Close modals when clicking outside
         document.addEventListener('click', (e) => {
@@ -456,8 +455,9 @@ class SMSVerificationService {
         const card = document.createElement('div');
         card.className = 'service-card';
         
-        const isAvailable = parseInt(service.quantity) > 0;
-        const quantity = parseInt(service.quantity);
+        // Get quantity from API response or use fallback
+        const quantity = parseInt(service.quantity || service.count || 200);
+        const isAvailable = quantity > 0;
         
         // Determine service status
         let status = 'available';
@@ -471,8 +471,9 @@ class SMSVerificationService {
             statusText = 'สต็อกน้อย';
         }
 
-        // Use fallback pricing initially for better performance
-        const estimatedPrice = (parseFloat(service.price) * 35.5 + 10).toFixed(2);
+        // Use cost from API response or fallback pricing
+        const apiPrice = parseFloat(service.cost || service.price);
+        const estimatedPrice = apiPrice ? (apiPrice * 35.5 + 10).toFixed(2) : '15.00';
         let thbPrice = estimatedPrice;
         let priceNote = 'ราคาประมาณ';
         let fxRate = 35.5;
@@ -513,8 +514,9 @@ class SMSVerificationService {
         const card = document.createElement('div');
         card.className = 'service-card';
         
-        const isAvailable = parseInt(service.quantity) > 0;
-        const quantity = parseInt(service.quantity);
+        // Get quantity from API response or use fallback
+        const quantity = parseInt(service.quantity || service.count || 200);
+        const isAvailable = quantity > 0;
         
         // Determine service status
         let status = 'available';
@@ -528,8 +530,9 @@ class SMSVerificationService {
             statusText = 'สต็อกน้อย';
         }
 
-        // Use fallback pricing initially for better performance
-        const estimatedPrice = (parseFloat(service.price) * 35.5 + 10).toFixed(2);
+        // Use cost from API response or fallback pricing
+        const apiPrice = parseFloat(service.cost || service.price);
+        const estimatedPrice = apiPrice ? (apiPrice * 35.5 + 10).toFixed(2) : '15.00';
         let thbPrice = estimatedPrice;
         let priceNote = 'ราคาประมาณ';
         let fxRate = 35.5;
@@ -650,7 +653,9 @@ class SMSVerificationService {
             if (!response.ok) {
                 if (result.code === 'INSUFFICIENT_CREDIT') {
                     this.showMessage('ยอดเงินไม่เพียงพอ กรุณาเติมเงิน', 'error');
-                    this.showTopupModal();
+                    // Show QR payment modal with required amount
+                    const requiredAmount = parseFloat(price);
+                    this.showQRPaymentModal(requiredAmount, serviceName);
                     return;
                 }
                 throw new Error(result.error || 'Purchase failed');
@@ -1486,23 +1491,6 @@ class SMSVerificationService {
     }
 
     // Wallet Methods
-    async loadWalletBalance() {
-        try {
-            const response = await fetch(`${this.BUSINESS_API_BASE}/wallet/balance`, {
-                headers: {
-                    'X-Session-Id': this.currentSessionId
-                }
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                this.walletBalance = data.balance;
-                this.updateWalletDisplay();
-            }
-        } catch (error) {
-            console.warn('Failed to load wallet balance:', error);
-        }
-    }
 
     updateWalletDisplay() {
         const balanceElement = document.getElementById('walletBalance');
@@ -1585,26 +1573,13 @@ class SMSVerificationService {
         }
 
         try {
-            // Initiate top-up
-            const response = await fetch(`${this.BUSINESS_API_BASE}/topup/initiate`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Session-Id': this.currentSessionId
-                },
-                body: JSON.stringify({
-                    amountTHB: amount,
-                    method: method
-                })
+            // Initiate top-up using makeRequest for consistent auth handling
+            const response = await this.makeRequest('/api/topup/initiate', 'POST', {
+                amountTHB: amount,
+                method: method
             });
 
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to initiate top-up');
-            }
-
-            const topupId = result.topupId;
+            const topupId = response.topupId;
             this.closeTopupModal();
             this.showTopupStatusModal(topupId);
 
@@ -1640,19 +1615,11 @@ class SMSVerificationService {
                     if (!payload) {
                         throw new Error('กรุณากรอก QR Code Payload');
                     }
-                    const payloadResponse = await fetch(`${this.BUSINESS_API_BASE}/topup/verify/payload`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Session-Id': this.currentSessionId
-                        },
-                        body: JSON.stringify({
-                            topupId: topupId,
-                            payload: payload,
-                            checkDuplicate: checkDuplicate
-                        })
+                    const payloadResult = await this.makeRequest('/api/topup/verify/payload', 'POST', {
+                        topupId: topupId,
+                        payload: payload,
+                        checkDuplicate: checkDuplicate
                     });
-                    const payloadResult = await payloadResponse.json();
                     this.handleTopupResult(payloadResult);
                     return;
 
@@ -1661,19 +1628,11 @@ class SMSVerificationService {
                     if (!url) {
                         throw new Error('กรุณากรอก URL รูปภาพ');
                     }
-                    const urlResponse = await fetch(`${this.BUSINESS_API_BASE}/topup/verify/payload`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Session-Id': this.currentSessionId
-                        },
-                        body: JSON.stringify({
-                            topupId: topupId,
-                            url: url,
-                            checkDuplicate: checkDuplicate
-                        })
+                    const urlResult = await this.makeRequest('/api/topup/verify/payload', 'POST', {
+                        topupId: topupId,
+                        url: url,
+                        checkDuplicate: checkDuplicate
                     });
-                    const urlResult = await urlResponse.json();
                     this.handleTopupResult(urlResult);
                     return;
 
@@ -1682,19 +1641,11 @@ class SMSVerificationService {
                     if (!base64) {
                         throw new Error('กรุณากรอก Base64 รูปภาพ');
                     }
-                    const base64Response = await fetch(`${this.BUSINESS_API_BASE}/topup/verify/payload`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Session-Id': this.currentSessionId
-                        },
-                        body: JSON.stringify({
-                            topupId: topupId,
-                            base64: base64,
-                            checkDuplicate: checkDuplicate
-                        })
+                    const base64Result = await this.makeRequest('/api/topup/verify/payload', 'POST', {
+                        topupId: topupId,
+                        base64: base64,
+                        checkDuplicate: checkDuplicate
                     });
-                    const base64Result = await base64Response.json();
                     this.handleTopupResult(base64Result);
                     return;
 
@@ -1708,15 +1659,8 @@ class SMSVerificationService {
                     break;
             }
 
-            const response = await fetch(`${this.BUSINESS_API_BASE}${endpoint}`, {
-                method: 'POST',
-                headers: {
-                    'X-Session-Id': this.currentSessionId
-                },
-                body: formData
-            });
-
-            const result = await response.json();
+            // Submit form data for image uploads using makeRequest with FormData
+            const result = await this.makeRequestWithFormData(`/api${endpoint}`, formData);
             this.handleTopupResult(result);
 
         } catch (error) {
@@ -1745,23 +1689,16 @@ class SMSVerificationService {
         // Start polling for status
         this.topupStatusInterval = setInterval(async () => {
             try {
-                const response = await fetch(`${this.BUSINESS_API_BASE}/topup/status/${topupId}`, {
-                    headers: {
-                        'X-Session-Id': this.currentSessionId
-                    }
-                });
+                const status = await this.makeRequest(`/api/topup/status/${topupId}`, 'GET');
                 
-                if (response.ok) {
-                    const status = await response.json();
-                    if (status.status !== 'pending') {
-                        clearInterval(this.topupStatusInterval);
-                        if (status.status === 'verified') {
-                            this.updateTopupStatus('success', `เติมเงินสำเร็จ ฿${status.amountTHB}`);
-                            this.walletBalance += status.amountTHB;
-                            this.updateWalletDisplay();
-                        } else {
-                            this.updateTopupStatus('error', status.reason || 'การตรวจสอบล้มเหลว');
-                        }
+                if (status.status !== 'pending') {
+                    clearInterval(this.topupStatusInterval);
+                    if (status.status === 'verified') {
+                        this.updateTopupStatus('success', `เติมเงินสำเร็จ ฿${status.amountTHB}`);
+                        this.walletBalance += status.amountTHB;
+                        this.updateWalletDisplay();
+                    } else {
+                        this.updateTopupStatus('error', status.reason || 'การตรวจสอบล้มเหลว');
                     }
                 }
             } catch (error) {
@@ -1858,18 +1795,17 @@ class SMSVerificationService {
             this.handleRegister();
         });
         
-        // Top-up button (requires auth)
-        document.getElementById('topupBtn')?.addEventListener('click', () => {
-            if (!this.isAuthenticated) {
-                this.showAuthModal('login');
-            } else {
-                this.showTopupModal();
-            }
-        });
+        // Old topup button removed - using QR payment only
     }
 
     async checkAuthStatus() {
         try {
+            // ตรวจสอบ token จาก localStorage ก่อน
+            const storedToken = localStorage.getItem('accessToken');
+            if (storedToken) {
+                this.accessToken = storedToken;
+            }
+            
             const response = await this.makeRequest('/api/auth/me', 'GET');
             if (response.user) {
                 this.currentUser = response.user;
@@ -1877,9 +1813,11 @@ class SMSVerificationService {
                 await this.loadWalletBalance();
             }
         } catch (error) {
-            // User not authenticated
+            // User not authenticated - ล้างข้อมูลเก่า
             this.currentUser = null;
             this.isAuthenticated = false;
+            this.accessToken = null;
+            localStorage.removeItem('accessToken');
         }
     }
 
@@ -1930,6 +1868,9 @@ class SMSVerificationService {
             this.accessToken = response.accessToken;
             this.isAuthenticated = true;
             
+            // เก็บ token ใน localStorage
+            localStorage.setItem('accessToken', response.accessToken);
+            
             this.showAuthMessage('success', 'เข้าสู่ระบบสำเร็จ!');
             
             // Load wallet balance and update UI
@@ -1972,6 +1913,9 @@ class SMSVerificationService {
             this.accessToken = response.accessToken;
             this.isAuthenticated = true;
             
+            // เก็บ token ใน localStorage
+            localStorage.setItem('accessToken', response.accessToken);
+            
             this.showAuthMessage('success', response.message || 'สมัครสมาชิกสำเร็จ!');
             
             // Load wallet balance and update UI
@@ -2001,8 +1945,32 @@ class SMSVerificationService {
             this.isAuthenticated = false;
             this.walletBalance = 0;
             
+            // ลบ token จาก localStorage
+            localStorage.removeItem('accessToken');
+            
             this.updateHeaderAuth();
             this.hideAuthModal();
+        }
+    }
+
+    // Refresh access token using refresh token
+    async refreshAccessToken() {
+        try {
+            const response = await fetch('/api/auth/refresh', {
+                method: 'POST',
+                credentials: 'include' // ส่ง cookies
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                this.accessToken = data.accessToken;
+                localStorage.setItem('accessToken', data.accessToken);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Token refresh failed:', error);
+            return false;
         }
     }
 
@@ -2020,7 +1988,11 @@ class SMSVerificationService {
             const userAvatar = document.getElementById('userAvatar');
             
             if (userName) userName.textContent = this.currentUser.email;
-            if (userBalance) userBalance.textContent = `฿${this.walletBalance.toFixed(2)}`;
+            
+            // Fix walletBalance.toFixed error by ensuring it's a number
+            const balance = typeof this.walletBalance === 'number' ? this.walletBalance : 0;
+            if (userBalance) userBalance.textContent = `฿${balance.toFixed(2)}`;
+            
             if (userAvatar) userAvatar.textContent = this.currentUser.email.charAt(0).toUpperCase();
         } else {
             notLoggedIn.style.display = 'flex';
@@ -2029,15 +2001,180 @@ class SMSVerificationService {
     }
 
     async loadWalletBalance() {
-        if (!this.isAuthenticated) return;
+        if (!this.isAuthenticated) {
+            console.log('⚠️ Not authenticated, skipping wallet balance load');
+            return;
+        }
         
         try {
+            console.log('🔄 Loading wallet balance from API...');
             const response = await this.makeRequest('/api/wallet/balance', 'GET');
-            this.walletBalance = response.balance;
+            console.log('📊 API response:', response);
+            
+            // Ensure walletBalance is always a number
+            // API returns { balance: { balance: number } } so we need response.balance.balance
+            const balanceValue = response.balance?.balance || response.balance || 0;
+            this.walletBalance = typeof balanceValue === 'number' ? balanceValue : 0;
+            console.log('💰 Wallet balance set to:', this.walletBalance);
+            
             this.updateHeaderAuth();
+            console.log('✅ Header auth updated');
         } catch (error) {
-            console.error('Failed to load wallet balance:', error);
+            console.error('❌ Failed to load wallet balance:', error);
+            // Set default balance on error
+            this.walletBalance = 0;
+            this.updateHeaderAuth();
         }
+    }
+
+    // QR Payment Methods - Using static PromptPay QR Code
+
+    showQRPaymentModal(amount = null, serviceName = null) {
+        const modal = document.getElementById('qrPaymentModal');
+        modal.classList.add('active');
+        
+        if (serviceName) {
+            document.querySelector('#qrPaymentModal .modal-header h3').textContent = `เติมเงิน - ${serviceName}`;
+        } else {
+            document.querySelector('#qrPaymentModal .modal-header h3').textContent = 'เติมเงินด้วย QR พร้อมเพย์';
+        }
+        
+        // Setup file upload area interactions
+        this.setupFileUploadArea();
+    }
+
+    closeQRPaymentModal() {
+        const modal = document.getElementById('qrPaymentModal');
+        modal.classList.remove('active');
+        
+        // Clear file input and status
+        document.getElementById('qrPaymentSlipFile').value = '';
+        document.getElementById('qrPaymentStatus').innerHTML = '';
+        document.getElementById('selectedFileName').style.display = 'none';
+        
+        // Reset modal title
+        document.querySelector('#qrPaymentModal .modal-header h3').textContent = 'เติมเงินด้วย QR พร้อมเพย์';
+    }
+
+
+    
+    setupFileUploadArea() {
+        const fileInput = document.getElementById('qrPaymentSlipFile');
+        const fileUploadArea = document.getElementById('fileUploadArea');
+        const selectedFileName = document.getElementById('selectedFileName');
+        const fileNameText = document.getElementById('fileNameText');
+        
+        // File input change event
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                // Show selected file name
+                fileNameText.textContent = `ไฟล์ที่เลือก: ${file.name}`;
+                selectedFileName.style.display = 'block';
+                
+                // Change upload area style
+                fileUploadArea.style.borderColor = '#4caf50';
+                fileUploadArea.style.backgroundColor = '#f1f8e9';
+            }
+        });
+        
+        // Drag and drop functionality
+        fileUploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUploadArea.style.borderColor = '#2196f3';
+            fileUploadArea.style.backgroundColor = '#e3f2fd';
+        });
+        
+        fileUploadArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            fileUploadArea.style.borderColor = '#ccc';
+            fileUploadArea.style.backgroundColor = '#fafafa';
+        });
+        
+        fileUploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                // Trigger change event
+                const event = new Event('change', { bubbles: true });
+                fileInput.dispatchEvent(event);
+            }
+            fileUploadArea.style.borderColor = '#ccc';
+            fileUploadArea.style.backgroundColor = '#fafafa';
+        });
+    }
+
+
+    async uploadSlipForQRPayment() {
+        const fileInput = document.getElementById('qrPaymentSlipFile');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            this.showMessage('กรุณาเลือกไฟล์สลิป', 'error');
+            return;
+        }
+        
+        try {
+            // Show loading
+            document.getElementById('qrPaymentStatus').innerHTML = `
+                <div class="status-loading">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>กำลังตรวจสอบสลิป...</p>
+                </div>
+            `;
+            
+            // Upload and verify slip
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('method', 'image');
+            formData.append('checkDuplicate', true);
+            
+            const response = await this.makeRequestWithFormData('/api/topup/verify/image', formData);
+            
+            console.log('🔍 Top-up response:', response);
+            
+            if (response.success) {
+                // Payment successful
+                document.getElementById('qrPaymentStatus').innerHTML = `
+                    <div class="status-success">
+                        <i class="fas fa-check-circle"></i>
+                        <p class="status-message">เติมเงินสำเร็จ!</p>
+                        <p class="status-details">จำนวนเงิน: ฿${response.amount.toFixed(2)}</p>
+                        <p class="status-details">ยอดเงินคงเหลือ: ฿${response.newBalance.toFixed(2)}</p>
+                    </div>
+                `;
+                
+                // Update wallet balance
+                console.log('🔄 Loading wallet balance after top-up...');
+                await this.loadWalletBalance();
+                console.log('✅ Wallet balance updated:', this.walletBalance);
+                
+                // Auto close modal after 3 seconds
+                setTimeout(() => {
+                    this.closeQRPaymentModal();
+                }, 3000);
+                
+            } else {
+                console.log('❌ Top-up failed:', response);
+                throw new Error(response.message || response.error || 'การตรวจสอบสลิปล้มเหลว');
+            }
+            
+        } catch (error) {
+            console.error('QR Payment error:', error);
+            document.getElementById('qrPaymentStatus').innerHTML = `
+                <div class="status-error">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <p class="status-message">การเติมเงินล้มเหลว</p>
+                    <p class="status-details">${error.message || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ'}</p>
+                </div>
+            `;
+        }
+    }
+
+    showPaymentChoiceModal() {
+        // Always show QR payment modal - old topup system removed
+        this.showQRPaymentModal();
     }
 
     showAuthMessage(type, message) {
@@ -2143,7 +2280,7 @@ class SMSVerificationService {
         // Check if user has sufficient balance
         if (this.walletBalance < parseFloat(price)) {
             alert(`เครดิตไม่เพียงพอ — โปรดเติมเงิน\nยอดปัจจุบัน: ฿${this.walletBalance.toFixed(2)}\nต้องการ: ฿${price}`);
-            this.showTopupModal();
+            this.showQRPaymentModal(parseFloat(price), serviceName);
             return;
         }
 
@@ -2186,7 +2323,7 @@ class SMSVerificationService {
             
             if (error.message.includes('INSUFFICIENT_CREDIT')) {
                 alert('เครดิตไม่เพียงพอ — โปรดเติมเงิน');
-                this.showTopupModal();
+                this.showQRPaymentModal(parseFloat(price), serviceName);
             } else {
                 alert(`ไม่สามารถซื้อบริการได้: ${error.message}`);
             }
@@ -2247,7 +2384,7 @@ class SMSVerificationService {
         return statusTexts[status] || status;
     }
 
-    // Override makeRequest to include auth headers
+    // Override makeRequest to include auth headers with auto refresh
     async makeRequest(url, method = 'GET', data = null) {
         const options = {
             method,
@@ -2266,6 +2403,68 @@ class SMSVerificationService {
         
         const response = await fetch(url, options);
         
+        // ตรวจสอบ token หมดอายุและ refresh อัตโนมัติ
+        if (!response.ok && response.status === 401 && this.accessToken) {
+            try {
+                await this.refreshAccessToken();
+                // ลองใหม่ด้วย token ใหม่
+                if (this.accessToken) {
+                    options.headers['Authorization'] = `Bearer ${this.accessToken}`;
+                    const retryResponse = await fetch(url, options);
+                    if (retryResponse.ok) {
+                        return await retryResponse.json();
+                    }
+                }
+            } catch (refreshError) {
+                // Refresh ล้มเหลว - ล็อกเอาท์
+                this.logout();
+                throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
+            }
+        }
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `HTTP ${response.status}`);
+        }
+        
+        return await response.json();
+    }
+
+    // Method for handling FormData uploads with authentication
+    async makeRequestWithFormData(url, formData) {
+        const options = {
+            method: 'POST',
+            headers: {}
+        };
+        
+        if (this.accessToken) {
+            options.headers['Authorization'] = `Bearer ${this.accessToken}`;
+        }
+        
+        // Don't set Content-Type for FormData, let browser set it with boundary
+        options.body = formData;
+        
+        const response = await fetch(url, options);
+        
+        // ตรวจสอบ token หมดอายุและ refresh อัตโนมัติ
+        if (!response.ok && response.status === 401 && this.accessToken) {
+            try {
+                await this.refreshAccessToken();
+                // ลองใหม่ด้วย token ใหม่
+                if (this.accessToken) {
+                    options.headers['Authorization'] = `Bearer ${this.accessToken}`;
+                    const retryResponse = await fetch(url, options);
+                    if (retryResponse.ok) {
+                        return await retryResponse.json();
+                    }
+                }
+            } catch (refreshError) {
+                // Refresh ล้มเหลว - ล็อกเอาท์
+                this.logout();
+                throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
+            }
+        }
+        
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.message || `HTTP ${response.status}`);
@@ -2281,24 +2480,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await window.smsService.initAuth();
 });
 
-// Global functions for modal buttons
-function closeTopupModal() {
-    if (window.smsService) {
-        window.smsService.closeTopupModal();
-    }
-}
-
-function closeTopupStatusModal() {
-    if (window.smsService) {
-        window.smsService.closeTopupStatusModal();
-    }
-}
-
-function submitTopup() {
-    if (window.smsService) {
-        window.smsService.submitTopup();
-    }
-}
+// Global functions for modal buttons - old topup functions removed
 
 // Add CSS for message animations
 const style = document.createElement('style');

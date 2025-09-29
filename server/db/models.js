@@ -133,6 +133,47 @@ class Database {
                 ip_address TEXT NOT NULL,
                 success BOOLEAN NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`,
+
+            // Services table
+            `CREATE TABLE IF NOT EXISTS services (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                base_vendor TEXT NOT NULL,
+                markup_thb REAL DEFAULT 10.00,
+                status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`,
+
+            // Countries and Operators table
+            `CREATE TABLE IF NOT EXISTS operators (
+                operator_code TEXT PRIMARY KEY,
+                operator_name TEXT NOT NULL,
+                country_code TEXT NOT NULL,
+                country_name TEXT NOT NULL,
+                status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`,
+
+            // Activations table
+            `CREATE TABLE IF NOT EXISTS activations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                order_id INTEGER NOT NULL,
+                service_id TEXT NOT NULL,
+                country_code TEXT NOT NULL,
+                operator_code TEXT NOT NULL,
+                phone_number TEXT,
+                received_sms TEXT,
+                status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'completed', 'cancelled', 'expired')),
+                thunder_order_id TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+                FOREIGN KEY (order_id) REFERENCES orders (id) ON DELETE CASCADE
             )`
         ];
 
@@ -158,7 +199,78 @@ class Database {
         ];
 
         for (const index of indexes) {
-            await this.run(index);
+            try {
+                await this.run(index);
+            } catch (error) {
+                // Skip index creation if column doesn't exist yet (will be created during migration)
+                if (error.message.includes('no such column')) {
+                    console.log(`⚠️  Skipping index creation (column not found): ${index}`);
+                } else {
+                    throw error;
+                }
+            }
+        }
+
+        // Insert sample data if tables are empty
+        await this.insertSampleData();
+    }
+
+    async insertSampleData() {
+        try {
+            // Check if services table is empty
+            const serviceCount = await this.get('SELECT COUNT(*) as count FROM services');
+            if (serviceCount.count === 0) {
+                console.log('📋 Inserting sample services...');
+                await this.run(`
+                    INSERT INTO services (id, name, description, base_vendor, markup_thb) VALUES
+                    ('whatsapp', 'WhatsApp', 'WhatsApp verification service', '5sim', 15.00),
+                    ('telegram', 'Telegram', 'Telegram verification service', '5sim', 12.00),
+                    ('instagram', 'Instagram', 'Instagram verification service', '5sim', 20.00),
+                    ('facebook', 'Facebook', 'Facebook verification service', '5sim', 18.00),
+                    ('twitter', 'Twitter', 'Twitter verification service', '5sim', 16.00),
+                    ('google', 'Google', 'Google verification service', '5sim', 14.00),
+                    ('apple', 'Apple', 'Apple verification service', '5sim', 22.00),
+                    ('microsoft', 'Microsoft', 'Microsoft verification service', '5sim', 19.00),
+                    ('discord', 'Discord', 'Discord verification service', '5sim', 13.00),
+                    ('tiktok', 'TikTok', 'TikTok verification service', '5sim', 21.00)
+                `);
+                console.log('✅ Sample services inserted');
+            }
+
+            // Check if operators table is empty
+            const operatorCount = await this.get('SELECT COUNT(*) as count FROM operators');
+            if (operatorCount.count === 0) {
+                console.log('📋 Inserting sample operators...');
+                await this.run(`
+                    INSERT INTO operators (operator_code, operator_name, country_code, country_name) VALUES
+                    ('th_ais', 'AIS', 'TH', 'Thailand'),
+                    ('th_true', 'True', 'TH', 'Thailand'),
+                    ('th_dtac', 'dtac', 'TH', 'Thailand'),
+                    ('us_verizon', 'Verizon', 'US', 'United States'),
+                    ('us_att', 'AT&T', 'US', 'United States'),
+                    ('us_tmobile', 'T-Mobile', 'US', 'United States'),
+                    ('gb_ee', 'EE', 'GB', 'United Kingdom'),
+                    ('gb_vodafone', 'Vodafone', 'GB', 'United Kingdom'),
+                    ('gb_o2', 'O2', 'GB', 'United Kingdom'),
+                    ('de_tmobile', 'T-Mobile', 'DE', 'Germany'),
+                    ('de_vodafone', 'Vodafone', 'DE', 'Germany'),
+                    ('fr_orange', 'Orange', 'FR', 'France'),
+                    ('fr_sfr', 'SFR', 'FR', 'France'),
+                    ('jp_docomo', 'NTT Docomo', 'JP', 'Japan'),
+                    ('jp_softbank', 'SoftBank', 'JP', 'Japan'),
+                    ('kr_sk', 'SK Telecom', 'KR', 'South Korea'),
+                    ('kr_kt', 'KT', 'KR', 'South Korea'),
+                    ('cn_china_mobile', 'China Mobile', 'CN', 'China'),
+                    ('cn_china_unicom', 'China Unicom', 'CN', 'China'),
+                    ('in_airtel', 'Airtel', 'IN', 'India'),
+                    ('in_jio', 'Jio', 'IN', 'India')
+                `);
+                console.log('✅ Sample operators inserted');
+            }
+
+        } catch (error) {
+            console.error('❌ Error inserting sample data:', error);
+            // Don't throw here as this is not critical
         }
     }
 

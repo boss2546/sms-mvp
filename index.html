@@ -49,8 +49,8 @@
                             </div>
                         </div>
                         <div class="header-auth-actions">
-                            <button class="header-auth-button outline" id="topupBtn">
-                                <i class="fas fa-plus"></i>
+                            <button class="header-auth-button outline" id="qrPaymentBtn">
+                                <i class="fas fa-qrcode"></i>
                                 เติมเงิน
                             </button>
                             <button class="header-auth-button outline" id="historyBtn">
@@ -212,109 +212,102 @@
         </div>
     </div>
 
-    <!-- Top-up Modal -->
-    <div id="topupModal" class="modal">
+
+
+    <!-- QR Payment Modal -->
+    <div id="qrPaymentModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>เติมเงิน</h3>
-                <button class="modal-close" onclick="closeTopupModal()">
+                <h3>ชำระเงินด้วย QR Code</h3>
+                <button class="modal-close" onclick="smsService.closeQRPaymentModal()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <div class="modal-body">
                 <div class="topup-form">
+                    <!-- QR Code Section -->
                     <div class="form-group">
-                        <label for="topupAmount">จำนวนเงิน (บาท)</label>
-                        <input type="number" id="topupAmount" placeholder="กรอกจำนวนเงิน" min="1" step="0.01">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>วิธีการส่งหลักฐาน</label>
-                        <div class="topup-methods">
-                            <label class="method-option">
-                                <input type="radio" name="topupMethod" value="image" checked>
-                                <span>อัปโหลดรูปสลิป</span>
-                            </label>
-                            <label class="method-option">
-                                <input type="radio" name="topupMethod" value="payload">
-                                <span>QR Code Payload</span>
-                            </label>
-                            <label class="method-option">
-                                <input type="radio" name="topupMethod" value="url">
-                                <span>URL รูปภาพ</span>
-                            </label>
-                            <label class="method-option">
-                                <input type="radio" name="topupMethod" value="base64">
-                                <span>Base64 รูปภาพ</span>
-                            </label>
-                            <label class="method-option">
-                                <input type="radio" name="topupMethod" value="truewallet">
-                                <span>TrueMoney Wallet</span>
-                            </label>
+                        <label>QR Code พร้อมเพย์ สำหรับชำระเงิน</label>
+                        <div id="qrCodeContainer" style="text-align: center; padding: 25px; border: 2px solid #e0e0e0; border-radius: 12px; margin: 15px 0; background: #fafafa;">
+                            <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: inline-block;">
+                                <img src="assets/promptpay-qr.jpg" alt="QR Code พร้อมเพย์" style="max-width: 256px; max-height: 256px; border-radius: 8px;">
+                            </div>
+                            <div style="margin-top: 15px;">
+                                <p style="color: #2e7d32; margin: 0; font-size: 1rem; font-weight: 600;">
+                                    <i class="fas fa-mobile-alt" style="margin-right: 8px;"></i>
+                                    สแกน QR Code นี้ด้วยแอปธนาคาร
+                                </p>
+                                <p style="color: #666; margin: 8px 0 0 0; font-size: 0.85rem;">
+                                    จำนวนเงินจะถูกตรวจสอบจากสลิปที่อัปโหลด
+                                </p>
+                            </div>
                         </div>
                     </div>
                     
-                    <div id="topupFileUpload" class="form-group">
-                        <label for="topupFile">อัปโหลดรูปสลิป</label>
-                        <input type="file" id="topupFile" accept="image/*">
-                        <div class="file-info">รองรับไฟล์ JPG, PNG ขนาดไม่เกิน 10MB</div>
+                    <!-- Instructions -->
+                    <div style="background: linear-gradient(135deg, #e8f5e8 0%, #f1f8e9 100%); padding: 20px; border-radius: 12px; margin: 20px 0; border-left: 5px solid #4caf50; box-shadow: 0 2px 8px rgba(76, 175, 80, 0.1);">
+                        <h4 style="margin: 0 0 15px 0; color: #2e7d32; display: flex; align-items: center;">
+                            <i class="fas fa-qrcode" style="margin-right: 10px; font-size: 1.2rem;"></i>
+                            วิธีชำระเงินด้วย QR พร้อมเพย์
+                        </h4>
+                        <div style="display: grid; gap: 12px; margin-bottom: 15px;">
+                            <div style="display: flex; align-items: center; padding: 10px; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                <div style="background: #4caf50; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-weight: bold; font-size: 0.9rem;">1</div>
+                                <span style="color: #424242; font-weight: 500;">สแกน QR Code พร้อมเพย์ ด้วยแอปธนาคาร (K PLUS, SCB Easy, ฯลฯ)</span>
+                            </div>
+                            <div style="display: flex; align-items: center; padding: 10px; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                <div style="background: #4caf50; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-weight: bold; font-size: 0.9rem;">2</div>
+                                <span style="color: #424242; font-weight: 500;">โอนเงิน ตามจำนวนที่คุณต้องการ</span>
+                            </div>
+                            <div style="display: flex; align-items: center; padding: 10px; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                <div style="background: #4caf50; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-weight: bold; font-size: 0.9rem;">3</div>
+                                <span style="color: #424242; font-weight: 500;">อัปโหลดสลิป การโอนเพื่อยืนยันและรับเครดิต</span>
+                            </div>
+                        </div>
+                        <div style="padding: 15px; background: rgba(255, 193, 7, 0.1); border-radius: 8px; color: #856404; border: 1px solid rgba(255, 193, 7, 0.3);">
+                            <div style="display: flex; align-items: flex-start;">
+                                <i class="fas fa-info-circle" style="margin-right: 10px; margin-top: 2px; color: #ff9800;"></i>
+                                <div>
+                                    <strong>หมายเหตุ:</strong> ระบบจะเติมเครดิตตามจำนวนเงินที่ตรวจสอบได้จากสลิป
+                                    <br><small style="color: #666; margin-top: 5px; display: block;">กรุณาแน่ใจว่าได้โอนเงินเรียบร้อยแล้วก่อนอัปโหลดสลิป</small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
-                    <div id="topupPayload" class="form-group" style="display: none;">
-                        <label for="topupPayloadInput">QR Code Payload</label>
-                        <textarea id="topupPayloadInput" placeholder="วาง QR Code Payload ที่นี่" rows="3"></textarea>
-                    </div>
-                    
-                    <div id="topupUrl" class="form-group" style="display: none;">
-                        <label for="topupUrlInput">URL รูปภาพ</label>
-                        <input type="url" id="topupUrlInput" placeholder="https://example.com/slip.jpg">
-                    </div>
-                    
-                    <div id="topupBase64" class="form-group" style="display: none;">
-                        <label for="topupBase64Input">Base64 รูปภาพ</label>
-                        <textarea id="topupBase64Input" placeholder="วาง Base64 string ที่นี่" rows="5"></textarea>
-                    </div>
-                    
-                    <div id="topupTrueWallet" class="form-group" style="display: none;">
-                        <label for="topupTrueWalletFile">อัปโหลดสลิป TrueMoney</label>
-                        <input type="file" id="topupTrueWalletFile" accept="image/*">
-                        <div class="file-info">รองรับไฟล์ JPG, PNG ขนาดไม่เกิน 10MB</div>
-                    </div>
-                    
+                    <!-- Upload Slip Section -->
                     <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="checkDuplicate" checked>
-                            <span>ตรวจสอบสลิปซ้ำ</span>
-                        </label>
+                        <label style="font-weight: 600; color: #333;">อัปโหลดสลิปการโอนเงิน</label>
+                        <div style="border: 2px dashed #ccc; border-radius: 12px; padding: 30px; text-align: center; background: #fafafa; transition: all 0.3s ease;" id="fileUploadArea">
+                            <input type="file" id="qrPaymentSlipFile" accept="image/*" style="display: none;">
+                            <div onclick="document.getElementById('qrPaymentSlipFile').click()" style="cursor: pointer;">
+                                <i class="fas fa-cloud-upload-alt" style="font-size: 2rem; color: #2196f3; margin-bottom: 10px;"></i>
+                                <p style="margin: 0; color: #666; font-size: 1rem;">
+                                    <strong>คลิกเพื่อเลือกไฟล์</strong> หรือลากไฟล์มาวางที่นี่
+                                </p>
+                                <p style="margin: 5px 0 0 0; color: #999; font-size: 0.85rem;">
+                                    รองรับไฟล์ JPG, PNG ขนาดไม่เกิน 10MB
+                                </p>
+                            </div>
+                        </div>
+                        <div id="selectedFileName" style="display: none; margin-top: 10px; padding: 10px; background: #e8f5e8; border-radius: 8px; color: #2e7d32;">
+                            <i class="fas fa-check-circle" style="margin-right: 8px;"></i>
+                            <span id="fileNameText"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Status Display -->
+                    <div id="qrPaymentStatus">
+                        <!-- Status will be shown here -->
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-outline" onclick="closeTopupModal()">ยกเลิก</button>
-                <button class="btn btn-primary" id="submitTopupBtn" onclick="submitTopup()">
+                <button class="btn btn-outline" onclick="smsService.closeQRPaymentModal()">ยกเลิก</button>
+                <button class="btn btn-primary" onclick="smsService.uploadSlipForQRPayment()" id="qrPaymentSubmitBtn">
                     <i class="fas fa-upload"></i>
-                    ส่งหลักฐาน
+                    อัปโหลดสลิป
                 </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Top-up Status Modal -->
-    <div id="topupStatusModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>สถานะการเติมเงิน</h3>
-            </div>
-            <div class="modal-body">
-                <div id="topupStatusContent">
-                    <div class="status-loading">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <p>กำลังตรวจสอบหลักฐาน...</p>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-outline" onclick="closeTopupStatusModal()">ปิด</button>
             </div>
         </div>
     </div>

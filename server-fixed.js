@@ -14,7 +14,6 @@ const WalletService = require('./server/services/walletService');
 const FXService = require('./server/services/fxService');
 const PricingService = require('./server/services/pricingService');
 const ThunderService = require('./server/services/thunderService');
-const MockThunderService = require('./server/services/mockThunderService');
 const AuthService = require('./server/services/authService');
 const AuthMiddleware = require('./server/middleware/auth');
 
@@ -40,7 +39,17 @@ const upload = multer({
     }
 });
 
-// Rate limiting removed - no longer limiting login attempts
+// Rate limiting
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // limit each IP to 5 requests per windowMs
+    message: {
+        error: 'TOO_MANY_ATTEMPTS',
+        message: 'พยายามเข้าสู่ระบบมากเกินไป กรุณารอ 15 นาที'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -88,27 +97,7 @@ async function initializeServices() {
         walletService = new WalletService(db);
         fxService = new FXService(db);
         pricingService = new PricingService(db, fxService);
-        
-        // Initialize Thunder Service with API status check
-        try {
-            thunderService = new ThunderService(db);
-            
-            // Test Thunder API status
-            const axios = require('axios');
-            const testResponse = await axios.get('https://api.thunder.in.th/v1/me', {
-                headers: {
-                    'Authorization': 'Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23'
-                },
-                timeout: 5000
-            });
-            
-            console.log('✅ Thunder Service initialized and API is accessible');
-        } catch (error) {
-            console.log('⚠️ Thunder API unavailable, using Mock Service');
-            console.log('   Reason:', error.response?.status, error.response?.data?.message || error.message);
-            thunderService = new MockThunderService(db);
-        }
-        
+        thunderService = new ThunderService(db);
         authService = new AuthService(db);
         authMiddleware = new AuthMiddleware(db);
         
@@ -134,7 +123,7 @@ async function initializeServices() {
 // Setup all routes after services are initialized
 function setupRoutes() {
     // Authentication endpoints
-    app.post('/api/auth/register', async (req, res) => {
+    app.post('/api/auth/register', authLimiter, async (req, res) => {
         try {
             const { email, password } = req.body;
             
@@ -156,8 +145,7 @@ function setupRoutes() {
 
             res.json({
                 user: result.user,
-                accessToken: result.accessToken,
-                refreshToken: result.refreshToken,
+                session: result.session,
                 message: 'สมัครสมาชิกสำเร็จ — ยินดีต้อนรับ!'
             });
         } catch (error) {
@@ -169,7 +157,7 @@ function setupRoutes() {
         }
     });
 
-    app.post('/api/auth/login', async (req, res) => {
+    app.post('/api/auth/login', authLimiter, async (req, res) => {
         try {
             const { email, password } = req.body;
             
@@ -272,60 +260,12 @@ function setupRoutes() {
         }
     });
 
-    app.get('/api/auth/me', async (req, res) => {
+    app.get('/api/auth/me', authMiddleware.verifyToken, async (req, res) => {
         try {
-            // Try to get token from Authorization header
-            const authHeader = req.headers.authorization;
-            const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-            
-            if (!token) {
-                return res.status(401).json({ 
-                    error: 'UNAUTHENTICATED',
-                    message: 'ไม่พบการเข้าสู่ระบบ'
-                });
-            }
-
-            // Verify token manually to avoid double response
-            try {
-                const authService = authMiddleware.getAuthService();
-                const decoded = authService.verifyAccessToken(token);
-                
-                if (!decoded) {
-                    return res.status(401).json({ 
-                        error: 'INVALID_TOKEN',
-                        message: 'โทเคนไม่ถูกต้องหรือหมดอายุ'
-                    });
-                }
-
-                // Get user data
-                const userResult = await authService.getUserById(decoded.userId);
-                if (!userResult.success) {
-                    return res.status(401).json({ 
-                        error: 'USER_NOT_FOUND',
-                        message: 'ไม่พบผู้ใช้'
-                    });
-                }
-
-                // Check if user is blocked
-                if (userResult.user.status === 'blocked') {
-                    return res.status(403).json({ 
-                        error: 'USER_BLOCKED',
-                        message: 'บัญชีนี้ถูกระงับการใช้งานชั่วคราว'
-                    });
-                }
-
-                return res.json({ user: userResult.user });
-
-            } catch (tokenError) {
-                return res.status(401).json({ 
-                    error: 'INVALID_TOKEN',
-                    message: 'โทเคนไม่ถูกต้องหรือหมดอายุ'
-                });
-            }
-            
+            res.json({ user: req.user });
         } catch (error) {
             console.error('❌ Get user error:', error);
-            return res.status(500).json({ 
+            res.status(500).json({ 
                 error: 'INTERNAL_ERROR',
                 message: 'เกิดข้อผิดพลาดภายในระบบ'
             });
@@ -405,7 +345,6 @@ function setupRoutes() {
                 });
             }
 
-            // No expected amount needed - use amount from slip
             const result = await thunderService.verifyTopupByImage(req.user.id, req.file);
             
             if (!result.success) {
@@ -418,8 +357,7 @@ function setupRoutes() {
             res.json({
                 success: result.success,
                 message: result.message,
-                amount: result.amount,
-                newBalance: result.newBalance
+                amount: result.amount
             });
         } catch (error) {
             console.error('❌ Top-up verify image error:', error);
@@ -679,237 +617,6 @@ function setupRoutes() {
                 error: 'INTERNAL_ERROR',
                 message: 'เกิดข้อผิดพลาดภายในระบบ'
             });
-        }
-    });
-
-    // Legacy API endpoints for backward compatibility
-    app.get('/api', generalLimiter, async (req, res) => {
-        try {
-            const { api_key, action, country, operator, lang, id, status } = req.query;
-            
-            // Validate API key (use a simple key for now)
-            if (api_key !== '7ccb326980edc2bfec78dcd66326aad7') {
-                return res.status(401).json('BAD_KEY');
-            }
-            
-            switch (action) {
-                case 'getCountryAndOperators':
-                    // Call real SMS verification API
-                    try {
-                        const response = await axios.get('https://sms-verification-number.com/stubs/handler_api', {
-                            params: {
-                                api_key: api_key,
-                                action: 'getCountryAndOperators',
-                                lang: lang || 'en'
-                            },
-                            timeout: 10000
-                        });
-                        
-                        // Transform the response to match expected format
-                        const apiData = response.data;
-                        const transformedData = apiData.map(item => ({
-                            id: item.id,
-                            name: item.name,
-                            operators: Object.keys(item.operators || {}).map(opKey => ({
-                                id: opKey,
-                                name: item.operators[opKey],
-                                country_code: item.id
-                            }))
-                        }));
-                        
-                        return res.json(transformedData);
-                        
-                    } catch (apiError) {
-                        console.error('❌ External API error:', apiError.message);
-                        
-                        // Fallback to local data if API fails
-                        const countries = await db.all(`
-                            SELECT DISTINCT country_code as id, country_name as name
-                            FROM operators 
-                            WHERE status = 'active'
-                            ORDER BY country_name
-                        `);
-                        
-                        const operators = await db.all(`
-                            SELECT operator_code as id, operator_name as name, country_code
-                            FROM operators 
-                            WHERE status = 'active'
-                            ORDER BY country_name, operator_name
-                        `);
-                        
-                        const result = countries.map(country => ({
-                            id: country.id,
-                            name: country.name,
-                            operators: operators.filter(op => op.country_code === country.id)
-                        }));
-                        
-                        return res.json(result);
-                    }
-                    
-                case 'getServicesAndCost':
-                    if (!country || !operator) {
-                        return res.status(400).json('ERROR_API');
-                    }
-                    
-                    // Call real SMS verification API for services and pricing
-                    try {
-                        const response = await axios.get('https://sms-verification-number.com/stubs/handler_api', {
-                            params: {
-                                api_key: api_key,
-                                action: 'getServicesAndCost',
-                                country: country,
-                                operator: operator,
-                                lang: lang || 'en'
-                            },
-                            timeout: 10000
-                        });
-                        
-                        // Transform the response to match expected format
-                        const apiData = response.data;
-                        const transformedData = apiData.map(item => ({
-                            id: item.id,
-                            name: item.name,
-                            description: `${item.name} verification service`,
-                            cost: parseFloat(item.price) || 0
-                        }));
-                        
-                        return res.json(transformedData);
-                        
-                    } catch (apiError) {
-                        console.error('❌ External API error for services:', apiError.message);
-                        
-                        // Fallback to local data if API fails
-                        const services = await db.all(`
-                            SELECT s.id, s.name, s.description, s.base_vendor, s.markup_thb
-                            FROM services s
-                            WHERE s.status = 'active'
-                            ORDER BY s.name
-                        `);
-                        
-                        // Get pricing for each service
-                        const servicesWithPricing = await Promise.all(services.map(async (service) => {
-                            try {
-                                const pricing = await pricingService.getPricing(service.id, country, operator);
-                                return {
-                                    id: service.id,
-                                    name: service.name,
-                                    description: service.description,
-                                    cost: pricing.success ? pricing.finalTHB : 0
-                                };
-                            } catch (error) {
-                                return {
-                                    id: service.id,
-                                    name: service.name,
-                                    description: service.description,
-                                    cost: 0
-                                };
-                            }
-                        }));
-                        
-                        return res.json(servicesWithPricing);
-                    }
-                    
-                case 'getStatus':
-                    if (!id) {
-                        return res.status(400).json('ERROR_API');
-                    }
-                    
-                    // Call real SMS verification API for status
-                    try {
-                        const response = await axios.get('https://sms-verification-number.com/stubs/handler_api', {
-                            params: {
-                                api_key: api_key,
-                                action: 'getStatus',
-                                id: id,
-                                lang: lang || 'en'
-                            },
-                            timeout: 10000
-                        });
-                        
-                        // The API returns the status directly
-                        return res.json(response.data);
-                        
-                    } catch (apiError) {
-                        console.error('❌ External API error for status:', apiError.message);
-                        
-                        // Fallback to local data if API fails
-                        const activation = await db.get(`
-                            SELECT a.*, o.status as order_status
-                            FROM activations a
-                            LEFT JOIN orders o ON a.order_id = o.id
-                            WHERE a.id = ?
-                        `, [id]);
-                        
-                        if (!activation) {
-                            return res.status(404).json('ERROR_API');
-                        }
-                        
-                        // Map status codes
-                        let statusCode = 0; // waiting
-                        if (activation.status === 'active') {
-                            statusCode = 1; // active
-                        } else if (activation.status === 'completed') {
-                            statusCode = 3; // completed
-                        } else if (activation.status === 'cancelled') {
-                            statusCode = 8; // cancelled
-                        }
-                        
-                        return res.json({
-                            id: activation.id,
-                            status: statusCode,
-                            phone: activation.phone_number,
-                            sms: activation.received_sms || '',
-                            time: activation.created_at
-                        });
-                    }
-                    
-                case 'setStatus':
-                    if (!id || !status) {
-                        return res.status(400).json('ERROR_API');
-                    }
-                    
-                    // Call real SMS verification API for setStatus
-                    try {
-                        const response = await axios.get('https://sms-verification-number.com/stubs/handler_api', {
-                            params: {
-                                api_key: api_key,
-                                action: 'setStatus',
-                                id: id,
-                                status: status,
-                                lang: lang || 'en'
-                            },
-                            timeout: 10000
-                        });
-                        
-                        // The API returns the result directly
-                        return res.json(response.data);
-                        
-                    } catch (apiError) {
-                        console.error('❌ External API error for setStatus:', apiError.message);
-                        
-                        // Fallback to local data update if API fails
-                        // Map status codes
-                        let newStatus = 'pending';
-                        if (status === '1') newStatus = 'active';
-                        else if (status === '3') newStatus = 'completed';
-                        else if (status === '8') newStatus = 'cancelled';
-                        
-                        await db.run(`
-                            UPDATE activations 
-                            SET status = ?, updated_at = CURRENT_TIMESTAMP
-                            WHERE id = ?
-                        `, [newStatus, id]);
-                        
-                        return res.json('OK');
-                    }
-                    
-                default:
-                    return res.status(400).json('ERROR_API');
-            }
-            
-        } catch (error) {
-            console.error('❌ Legacy API error:', error);
-            res.status(500).json('ERROR_API');
         }
     });
 

@@ -317,6 +317,34 @@
     }
 }
 
+/* QR Payment Modal Styles */
+#qrPaymentModal .modal-content {
+    max-width: 600px;
+}
+
+#qrCodeContainer {
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#qrPaymentString {
+    max-height: 100px;
+    overflow-y: auto;
+}
+
+.qr-payment-step {
+    transition: all 0.3s ease;
+}
+
+#qrPaymentStep1Footer,
+#qrPaymentStep2Footer {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+
 /* Animation */
 @keyframes fadeIn {
     from {

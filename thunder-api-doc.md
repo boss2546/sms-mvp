@@ -5,7 +5,7 @@ Thunder Developer API คือเครื่องมือที่ช่ว�
 
 **Base URL:** `https://api.thunder.in.th/v1`
 
-**API Key:** `c45a5db7-e073-4022-9786-4448688d85be`
+**API Key:** `cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23`
 
 ## Authentication
 All requests must include an Authorization header with a valid Bearer token.
@@ -13,7 +13,7 @@ All requests must include an Authorization header with a valid Bearer token.
 ทุกคำขอที่ส่งไปยัง API ต้องมีการยืนยันตัวตนโดยใช้ Authorization Header ที่ประกอบด้วย Bearer Token ที่ถูกต้อง ดังตัวอย่างด้านล่าง
 
 ```
-Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be
+Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23
 ```
 
 ## API Endpoints
@@ -25,13 +25,13 @@ Get application informations
 **Method:** `GET`  
 **Headers:**
 ```
-Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be
+Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23
 ```
 
 **Request Example:**
 ```bash
 curl --location 'https://api.thunder.in.th/v1/me' \
---header 'Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be'
+--header 'Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23'
 ```
 
 **Response Type:**
@@ -71,7 +71,7 @@ Send a qr code payload for verification
 **Method:** `GET`  
 **Headers:**
 ```
-Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be
+Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23
 ```
 
 **Query Parameters:**
@@ -81,7 +81,7 @@ Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be
 **Request Example:**
 ```bash
 curl --location 'https://api.thunder.in.th/v1/verify?payload=PAYLOAD' \
---header 'Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be'
+--header 'Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23'
 ```
 
 **Response Type:**
@@ -220,7 +220,7 @@ Send a image for verification
 **Headers:**
 ```
 Content-Type: multipart/form-data
-Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be
+Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23
 ```
 
 **Form Data:**
@@ -230,7 +230,7 @@ Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be
 **Request Example:**
 ```bash
 curl --location 'https://api.thunder.in.th/v1/verify' \
---header 'Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be' \
+--header 'Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23' \
 --form 'file=@"slip.jpg"'
 ```
 
@@ -242,7 +242,7 @@ Send a image for verification
 **Headers:**
 ```
 Content-Type: application/json
-Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be
+Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23
 ```
 
 **Body (JSON):**
@@ -253,7 +253,7 @@ Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be
 ```bash
 curl --location 'https://api.thunder.in.th/v1/verify' \
 --header 'Content-Type: application/json' \
---header 'Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be' \
+--header 'Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23' \
 --data '{
     "image": "BASE64"
 }'
@@ -267,7 +267,7 @@ Send a image for verification
 **Headers:**
 ```
 Content-Type: application/json
-Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be
+Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23
 ```
 
 **Body (JSON):**
@@ -278,7 +278,7 @@ Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be
 ```bash
 curl --location 'https://api.thunder.in.th/v1/verify' \
 --header 'Content-Type: application/json' \
---header 'Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be' \
+--header 'Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23' \
 --data '{
     "url": "URL"
 }'
@@ -292,7 +292,7 @@ Send a image for verification
 **Headers:**
 ```
 Content-Type: multipart/form-data
-Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be
+Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23
 ```
 
 **Form Data:**
@@ -302,7 +302,7 @@ Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be
 **Request Example:**
 ```bash
 curl --location 'https://api.thunder.in.th/v1/verify/truewallet' \
---header 'Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be' \
+--header 'Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23' \
 --form 'file=@"slip.jpg"'
 ```
 
@@ -401,7 +401,7 @@ try {
             payload: 'PAYLOAD',
         },
         headers: {
-            Authorization: 'Bearer c45a5db7-e073-4022-9786-4448688d85be',
+            Authorization: 'Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23',
         },
     })
 
@@ -423,7 +423,7 @@ try {
 
     const { data } = await axios.post('https://api.thunder.in.th/v1/verify', formData, {
         headers: {
-            Authorization: 'Bearer c45a5db7-e073-4022-9786-4448688d85be',
+            Authorization: 'Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23',
         },
     })
 
@@ -445,7 +445,7 @@ try {
         },
         {
             headers: {
-                Authorization: 'Bearer c45a5db7-e073-4022-9786-4448688d85be',
+                Authorization: 'Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23',
             },
         },
     )
@@ -468,7 +468,7 @@ try {
         },
         {
             headers: {
-                Authorization: 'Bearer c45a5db7-e073-4022-9786-4448688d85be',
+                Authorization: 'Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23',
             },
         },
     )
@@ -497,7 +497,7 @@ curl_setopt_array($curl, array(
   CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
   CURLOPT_CUSTOMREQUEST => 'GET',
   CURLOPT_HTTPHEADER => array(
-    'Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be',
+    'Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23',
   ),
 ));
 
@@ -524,7 +524,7 @@ curl_setopt_array($curl, array(
   CURLOPT_CUSTOMREQUEST => 'POST',
   CURLOPT_POSTFIELDS => array('file'=> new CURLFILE('IMAGE_PATH')),
   CURLOPT_HTTPHEADER => array(
-    'Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be',
+    'Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23',
   ),
 ));
 
@@ -554,7 +554,7 @@ curl_setopt_array($curl, array(
 }',
   CURLOPT_HTTPHEADER => array(
     'Content-Type: application/json',
-    'Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be'
+    'Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23'
   ),
 ));
 
@@ -584,7 +584,7 @@ curl_setopt_array($curl, array(
 }',
   CURLOPT_HTTPHEADER => array(
     'Content-Type: application/json',
-    'Authorization: Bearer c45a5db7-e073-4022-9786-4448688d85be'
+    'Authorization: Bearer cc8bc598-bde0-4e4c-967d-d4bdd2b9bb23'
   ),
 ));
 
